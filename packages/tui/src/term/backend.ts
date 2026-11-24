@@ -93,8 +93,8 @@ export interface TermBackendOptions {
 	readonly images?: PaintImages;
 	/**
 	 * Draw `main` as a scrollable window on the alternate screen instead of retiring it into
-	 * terminal history (see `transcript-window.ts`); the shutdown flush still writes the whole
-	 * transcript inline. May change at runtime. Default: off.
+	 * terminal history (see `transcript-window.ts`); shutdown writes nothing inline, so the
+	 * terminal comes back as it was (like `vim`). May change at runtime. Default: off.
 	 */
 	readonly fullscreen?: Accessor<boolean>;
 }
@@ -435,10 +435,11 @@ export class TermBackend {
 	 * terminal history (every live `main` block as it is now, settled or not,
 	 * after the ledger a pending replay still owes) and keeps the dock as the
 	 * viewport. A driver that cannot write inline yet (mid-resize) writes it
-	 * when it stops. Call it last, right before {@link stop}.
+	 * when it stops. Call it last, right before {@link stop}. The fullscreen transcript writes
+	 * nothing: leaving the alternate screen gives the terminal back as it was.
 	 */
 	flush(): void {
-		if (!this.#running) return;
+		if (!this.#running || untrack(() => this.#options.fullscreen?.() === true)) return;
 		// An unwritten batch was never written: the flush batch takes its rows (a replay stays owed).
 		this.#pending = undefined;
 		this.#flushing = true;

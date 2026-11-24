@@ -651,7 +651,7 @@ describe("TermBackend fullscreen transcript", () => {
 		return { driver, backend, screen, press, send };
 	}
 
-	it("scrolls inside the window, holds the view while content arrives below, and flushes everything on exit", () => {
+	it("scrolls inside the window, holds the view while content arrives below, and leaves nothing behind on exit", () => {
 		const b = signal(lines("b", 4));
 		const { driver, backend, screen, press, send } = fullscreenSetup(() => [
 			<rows key="a" lines={lines("a", 6)} />,
@@ -688,10 +688,11 @@ describe("TermBackend fullscreen transcript", () => {
 		backend.renderNow();
 		expect(screen()).toEqual(["b4", "b5", "b6", "b7", "b8", "dock"]);
 
-		// Exit: the whole transcript goes into terminal history on the normal screen.
+		// Exit: nothing is written to terminal history; the normal screen comes back as it was.
+		const frames = driver.frames.length;
 		backend.flush();
-		expect(driver.frames.at(-1)!.fullscreen).toBeUndefined();
-		expect(driver.history).toEqual([...lines("a", 6), ...lines("b", 9)]);
+		expect(driver.frames.length).toBe(frames);
+		expect(driver.history).toEqual([]);
 		backend.stop();
 	});
 

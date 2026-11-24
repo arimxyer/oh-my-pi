@@ -440,7 +440,7 @@ export const cfgTuiFullscreen = register({
 		label: "Fullscreen Transcript",
 		get description() {
 			const shift = formatKeyHint("shift");
-			return `Draw the session on the alternate screen and scroll the transcript inside omp (mouse wheel, Page Up/Page Down, Ctrl+Home/Ctrl+End) instead of in terminal scrollback. The whole transcript is written to scrollback on exit. Captures the mouse, so native text selection becomes ${shift}+drag`;
+			return `Draw the session on the alternate screen and scroll the transcript inside omp (mouse wheel, Page Up/Page Down, Ctrl+Home/Ctrl+End) instead of in terminal scrollback. Quitting leaves the terminal as it was, like vim. Captures the mouse, so native text selection becomes ${shift}+drag`;
 		},
 	},
 });
