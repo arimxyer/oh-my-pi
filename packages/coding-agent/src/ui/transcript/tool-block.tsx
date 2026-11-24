@@ -456,7 +456,9 @@ export class ToolCall {
 			shellTouched: this.#shellTouched,
 			activityVisible: this.#activityVisible,
 			showImages: this.#showImages,
-			presentation: () => (this.#expanded() ? "full" : this.#presentation()),
+			// Expanded (ctrl+o, or this card unfolded by hand) shows the full card over a compact presentation.
+			presentation: () =>
+				(this.#fold() === undefined ? this.#expanded() : !this.#fold()) ? "full" : this.#presentation(),
 			activity: () => this.activity(),
 			running: () => !this.#sealed() && (this.#result() === undefined || this.#partial()),
 			args: this.#args,
