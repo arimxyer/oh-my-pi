@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+# omp-update: move the patched omp onto a newer upstream, test, rebuild and reinstall it.
+#
+# Usage: omp-update [--check] [--main] [--force] [--no-push]
+#   --check    show the installed base and the update target, change nothing
+#   --main     update to upstream/main instead of the newest release
+#   --force    rebuild and reinstall even when the base is current
+#   --no-push  do not force-push the rebased branch to origin
+#
+# Default target: the newest upstream release tag, once it is newer than the current base
+# (until then the base stays where it is: use --main for unreleased upstream code).
+#
+# Environment:
+#   OMP_PATCH_BRANCH   branch holding the patches (default: patches/fullscreen)
+#   OMP_INSTALL_PATH   where to install the binary (default: the omp on PATH)
+#
+# A rebase conflict stops the command: resolve it, run `git rebase --continue`, then run it again.
+# Do not use `omp update`: it installs the plain upstream release over the patched binary.
+set -euo pipefail
+
+usage() { sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; }
+
+check=0
+track=release
+force=0
+push=1
+for arg in "$@"; do
+	case "$arg" in
+	--check) check=1 ;;
+	--main) track=main ;;
+	--force) force=1 ;;
+	--no-push) push=0 ;;
+	-h | --help)
+		usage
+		exit 0
+		;;
+	*)
+		echo "omp-update: unknown option: $arg" >&2
+		exit 2
+		;;
+	esac
+done
+
+repo="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../.." && pwd)"
+branch="${OMP_PATCH_BRANCH:-patches/fullscreen}"
+cd "$repo"
+
+git fetch --quiet upstream --tags
+# The patches are the commits since the branch left upstream/main's history.
+base="$(git merge-base "$branch" upstream/main)"
+if [ "$track" = main ]; then
+	target="$(git rev-parse upstream/main)"
+else
+	tag="$(git describe --tags --abbrev=0 --match 'v[0-9]*' upstream/main)"
+	if git merge-base --is-ancestor "$base" "$tag"; then
+		target="$(git rev-parse "$tag^{commit}")"
+	else
+		target="$base"
+	fi
+fi
+
+label() { git describe --tags --match 'v[0-9]*' "$1"; }
+echo "patched omp base: $(label "$base")"
+echo "update target:    $(label "$target")"
+if [ "$target" = "$base" ] && [ "$force" = 0 ]; then
+	if [ "$track" = release ]; then
+		echo "Up to date: no release is newer than the base (--main updates to upstream/main)."
+	else
+		echo "Up to date."
+	fi
+	exit 0
+fi
+if [ "$check" = 1 ]; then
+	if [ "$track" = main ]; then echo "An update is available: run omp-update --main."; else echo "An update is available: run omp-update."; fi
+	exit 0
+fi
+
+if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+	echo "omp-update: $repo has uncommitted changes; commit or stash them first." >&2
+	exit 1
+fi
+git switch --quiet "$branch"
+if ! git rebase --onto "$target" "$base"; then
+	echo "omp-update: rebase conflict. Resolve it, run 'git rebase --continue', then run omp-update again." >&2
+	exit 1
+fi
+
+bun install
+bun run build:native
+# The patch's own tests: a rebase that compiles can still break its behavior.
+(cd packages/tui && bun test test/term/backend.test.tsx test/term/host-mouse.test.tsx)
+(cd packages/coding-agent && bun test test/ui/composer/fullscreen-paging.test.tsx)
+bun --cwd=packages/coding-agent run build
+
+built="$repo/packages/coding-agent/dist/omp"
+"$built" --smoke-test
+install_path="${OMP_INSTALL_PATH:-$(command -v omp || true)}"
+if [ -z "$install_path" ]; then
+	echo "omp-update: no omp on PATH; set OMP_INSTALL_PATH." >&2
+	exit 1
+fi
+# The first install keeps the upstream binary it replaced; later ones only replace patched builds.
+if [ -e "$install_path" ] && [ ! -e "$install_path.upstream-backup" ]; then
+	cp -p "$install_path" "$install_path.upstream-backup"
+fi
+install -m 755 "$built" "$install_path"
+echo "Installed the patched omp ($(label HEAD)) at $install_path"
+
+if [ "$push" = 1 ]; then git push --force-with-lease origin "$branch"; fi
