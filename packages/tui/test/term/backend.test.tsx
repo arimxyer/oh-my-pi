@@ -629,3 +629,77 @@ describe("TermBackend main surface", () => {
 		backend.stop();
 	});
 });
+
+describe("TermBackend fullscreen transcript", () => {
+	function fullscreenSetup(main: () => unknown) {
+		const driver = new FakeDriver();
+		const surface = createSurface(() => ({ main: main() as never, dock: <rows key="dock" lines={["dock"]} /> }));
+		const backend = new TermBackend({
+			surface,
+			driver,
+			theme: () => PLAIN_THEME,
+			separator: () => 0,
+			fullscreen: () => true,
+		});
+		backend.start();
+		const screen = (): string[] => driver.frames.at(-1)!.fullscreen!.map(row => stripEscapes(row).trimEnd());
+		const send = (event: InputEvent): void => {
+			driver.input!(event);
+			backend.renderNow();
+		};
+		const press = (id: string): void => send({ type: "key", key: { id, kind: "press", raw: "" } });
+		return { driver, backend, screen, press, send };
+	}
+
+	it("scrolls inside the window, holds the view while content arrives below, and flushes everything on exit", () => {
+		const b = signal(lines("b", 4));
+		const { driver, backend, screen, press, send } = fullscreenSetup(() => [
+			<rows key="a" lines={lines("a", 6)} />,
+			<rows key="b" lines={b} />,
+		]);
+		backend.renderNow();
+		// 10 transcript rows, a 5-row window over the dock: the tail shows; nothing goes to history.
+		expect(screen()).toEqual(["a5", "b0", "b1", "b2", "b3", "dock"]);
+		expect(driver.history).toEqual([]);
+
+		// A page is the window less two rows; the last window row marks the content below.
+		press("pageUp");
+		expect(screen().slice(0, 4)).toEqual(["a2", "a3", "a4", "a5"]);
+		expect(screen()[4]).not.toBe("b0");
+
+		// Rows arriving below do not move what is shown.
+		b.set(lines("b", 8));
+		backend.renderNow();
+		expect(screen().slice(0, 4)).toEqual(["a2", "a3", "a4", "a5"]);
+
+		press("ctrl+end");
+		expect(screen()).toEqual(["b3", "b4", "b5", "b6", "b7", "dock"]);
+
+		// A wheel tick over the window scrolls three rows; over the dock it does nothing.
+		send({ type: "mouse", mouse: { row: 5, col: 0, button: "wheel-up", action: "press", mods: [] } });
+		expect(screen()).toEqual(["b3", "b4", "b5", "b6", "b7", "dock"]);
+		send({ type: "mouse", mouse: { row: 0, col: 0, button: "wheel-up", action: "press", mods: [] } });
+		expect(screen().slice(0, 4)).toEqual(["b0", "b1", "b2", "b3"]);
+
+		// Scrolling down to the tail follows it again.
+		press("pageDown");
+		expect(screen()).toEqual(["b3", "b4", "b5", "b6", "b7", "dock"]);
+		b.set(lines("b", 9));
+		backend.renderNow();
+		expect(screen()).toEqual(["b4", "b5", "b6", "b7", "b8", "dock"]);
+
+		// Exit: the whole transcript goes into terminal history on the normal screen.
+		backend.flush();
+		expect(driver.frames.at(-1)!.fullscreen).toBeUndefined();
+		expect(driver.history).toEqual([...lines("a", 6), ...lines("b", 9)]);
+		backend.stop();
+	});
+
+	it("top-aligns a transcript shorter than the window and keeps the dock at the bottom", () => {
+		const { screen, press } = fullscreenSetup(() => [<rows key="a" lines={lines("a", 2)} />]);
+		expect(screen()).toEqual(["a0", "a1", "", "", "", "dock"]);
+		// Nothing to scroll: Page Up leaves it following.
+		press("pageUp");
+		expect(screen()).toEqual(["a0", "a1", "", "", "", "dock"]);
+	});
+});

@@ -48,11 +48,15 @@ import {
 	paintNode,
 	type PointerHover,
 } from "./paint";
+import { widgetKeyMatches, widgetKeys } from "./keymap";
+import { scrollTranscript, type TranscriptAnchor, type TranscriptRows, transcriptWindow } from "./transcript-window";
 import { type WidgetContext, widgetContext, widgetFor } from "./widgets";
 import "./painters";
 
 /** Tick of a block drawing smooth motion (a shimmer sweep), ms. */
 const SMOOTH_TICK_MS = 1000 / 20;
+/** Rows one wheel tick scrolls the fullscreen transcript. */
+const WHEEL_ROWS = 3;
 
 /** Options of a {@link TermBackend}. */
 export interface TermBackendOptions {
@@ -87,6 +91,12 @@ export interface TermBackendOptions {
 	 * the budget through `driver.images`.
 	 */
 	readonly images?: PaintImages;
+	/**
+	 * Draw `main` as a scrollable window on the alternate screen instead of retiring it into
+	 * terminal history (see `transcript-window.ts`); the shutdown flush still writes the whole
+	 * transcript inline. May change at runtime. Default: off.
+	 */
+	readonly fullscreen?: Accessor<boolean>;
 }
 
 /** A history batch offered to the driver until it acknowledges the id. */
@@ -339,6 +349,10 @@ export class TermBackend {
 	/** Disposes the watcher of the last frame's reactive reads. */
 	#disposeWatch: (() => void) | undefined;
 	#running = false;
+	/** The fullscreen transcript's top row while scrolled away from the tail; null follows the tail. */
+	#anchor: TranscriptAnchor | null = null;
+	/** Rows of the last fullscreen transcript window (a page). */
+	#windowRows = 0;
 
 	constructor(options: TermBackendOptions) {
 		this.#surface = options.surface;
@@ -720,6 +734,47 @@ export class TermBackend {
 			covering += Math.min(block.covering ?? 0, block.rows.length);
 		}
 
+		if (!flush && this.#options.fullscreen?.()) {
+			const capacity = Math.max(0, height - dockRows + covering);
+			const view = transcriptWindow(this.#transcriptRows(width), this.#anchor, capacity);
+			this.#anchor = view.anchor;
+			this.#windowRows = capacity;
+			const rows = view.rows;
+			for (const { block, top } of view.blocks) {
+				const caret = block.cursor;
+				if (caret && top + caret.row >= 0 && top + caret.row < capacity && this.#surface.focused())
+					cursor = { row: top + caret.row, col: caret.col };
+				for (const hit of block.hits ?? []) {
+					if (top + hit.row < capacity && top + hit.row + hit.height > 0) hits.push({ hit, top, left: 0 });
+				}
+			}
+			while (rows.length < capacity) rows.push("");
+			if (view.anchor && capacity > 1) {
+				const key = widgetKeys("transcript.bottom")[0];
+				const hint = key ? `↓ more below · ${key} to follow` : "↓ more below";
+				rows[capacity - 1] = truncate(this.#options.theme().fg("dim", hint), width, "");
+			}
+			const dockTop = rows.length;
+			for (const placed of dock) {
+				rows.push(...placed.block.rows);
+				if (placed.block.cursor)
+					cursor = { row: dockTop + placed.top + placed.block.cursor.row, col: placed.block.cursor.col };
+				for (const hit of placed.block.hits ?? []) hits.push({ hit, top: dockTop + placed.top, left: 0 });
+			}
+			// Covering dock rows (a completion popup) draw over the window's last rows.
+			const hidden = Math.max(0, rows.length - height);
+			if (hidden > 0) {
+				rows.splice(0, hidden);
+				if (cursor) cursor = cursor.row >= hidden ? { row: cursor.row - hidden, col: cursor.col } : null;
+				for (const entry of hits) entry.top -= hidden;
+			}
+			for (const node of layer) place(rows, node);
+			this.#hits = hits;
+			// The normal screen stays as it was under the alternate one: the inline viewport keeps its place.
+			this.#nextPin = this.#pin;
+			return { viewport: [], cursor, fullscreen: rows };
+		}
+
 		// The committed prefix of main stays in history; the rest is live.
 		const main = this.#surface.main();
 		let start = 0;
@@ -1031,10 +1086,75 @@ export class TermBackend {
 		this.requestRender();
 	}
 
+	/** Whether the transcript draws as the fullscreen window (never in the shutdown flush). */
+	#fullscreenTranscript(): boolean {
+		return !this.#flushing && untrack(() => this.#options.fullscreen?.() === true);
+	}
+
+	/**
+	 * Whether keys may scroll the fullscreen transcript: the composer (or nothing) has focus and no
+	 * fullscreen layer is up.
+	 */
+	#transcriptKeys(key: KeyEvent, focused: UiNode | null): boolean {
+		if (key.kind === "release" || !this.#fullscreenTranscript()) return false;
+		const layer = this.#surface.layer();
+		if (layer.some(isFullscreen)) return false;
+		return !focused || (focused.kind === "editor" && pathTo(layer, focused).length === 0);
+	}
+
+	/** The fullscreen transcript's scroll keys; true when `key` scrolled it. */
+	#transcriptKey(key: KeyEvent): boolean {
+		const page = Math.max(1, this.#windowRows - 2);
+		if (widgetKeyMatches(key, "transcript.pageUp")) this.#scrollTranscript(-page);
+		else if (widgetKeyMatches(key, "transcript.pageDown")) this.#scrollTranscript(page);
+		else if (widgetKeyMatches(key, "transcript.top")) this.#scrollTranscript(-Number.MAX_SAFE_INTEGER);
+		else if (widgetKeyMatches(key, "transcript.bottom")) this.#anchor = null;
+		else return false;
+		return true;
+	}
+
+	#scrollTranscript(delta: number): void {
+		const width = Math.max(1, this.#driver.columns);
+		this.#anchor = scrollTranscript(this.#transcriptRows(width), this.#anchor, this.#windowRows, delta);
+	}
+
+	/** `main` as the fullscreen window reads it, painted on demand at `width`. */
+	#transcriptRows(width: number): TranscriptRows {
+		const main = this.#surface.main();
+		const separator = this.#options.separator ?? (() => 1);
+		const blocks: (Block | undefined)[] = [];
+		const leads: (number | undefined)[] = [];
+		const block = (index: number): Block => (blocks[index] ??= this.#paint(main[index]!, width));
+		return {
+			count: main.length,
+			node: index => main[index]!,
+			indexOf: node => main.indexOf(node),
+			block,
+			lead: index => {
+				let lead = leads[index];
+				if (lead === undefined) {
+					lead = 0;
+					for (let above = index - 1; above >= 0; above--) {
+						if (block(above).rows.length === 0) continue;
+						lead = separator(main[above]!, main[index]!);
+						break;
+					}
+					leads[index] = lead;
+				}
+				return lead;
+			},
+		};
+	}
+
 	#onKey(key: KeyEvent): void {
 		const focused = this.#surface.focused();
+		const transcript = this.#transcriptKeys(key, focused);
+		// Enter in the composer follows the transcript's tail again (whoever handles it).
+		if (transcript && focused && key.id === "enter") this.#anchor = null;
 		const path = focused ? pathTo(this.#regions(), focused) : [];
 		if (bubbleKey(path, key)) return;
+		// After the focus path (an open completion menu pages itself), before the editor's own page keys.
+		if (transcript && this.#transcriptKey(key)) return;
 		if (focused && path.length > 0) {
 			const widget = widgetFor(focused);
 			if (widget?.key?.(focused, key, this.#widgetContext(path))) return;
@@ -1070,6 +1190,15 @@ export class TermBackend {
 				bubbleEvent(path, { type: "select", key: keypathOf(path), item: hit.item });
 				return;
 			}
+		}
+		// Wheel ticks no hit consumed scroll the fullscreen transcript (over its window).
+		if (
+			(mouse.button === "wheel-up" || mouse.button === "wheel-down") &&
+			this.#fullscreenTranscript() &&
+			viewportRow < this.#windowRows &&
+			!this.#surface.layer().some(isFullscreen)
+		) {
+			this.#scrollTranscript(mouse.button === "wheel-up" ? -WHEEL_ROWS : WHEEL_ROWS);
 		}
 	}
 

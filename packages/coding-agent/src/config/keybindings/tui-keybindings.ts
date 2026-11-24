@@ -92,4 +92,17 @@ export const TUI_KEYBINDINGS = {
 		defaultKeys: ["escape", "ctrl+c"],
 		description: "Cancel selection",
 	},
+	"tui.transcript.pageUp": {
+		defaultKeys: ["pageUp", "shift+pageUp"],
+		description: "Scroll the fullscreen transcript a page up",
+	},
+	"tui.transcript.pageDown": {
+		defaultKeys: ["pageDown", "shift+pageDown"],
+		description: "Scroll the fullscreen transcript a page down",
+	},
+	"tui.transcript.top": { defaultKeys: "ctrl+home", description: "Scroll the fullscreen transcript to the top" },
+	"tui.transcript.bottom": {
+		defaultKeys: "ctrl+end",
+		description: "Scroll the fullscreen transcript to the bottom and follow it",
+	},
 } as const satisfies KeybindingDefinitions;

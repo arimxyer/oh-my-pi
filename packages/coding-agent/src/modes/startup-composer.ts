@@ -118,6 +118,7 @@ export function beginStartupComposer(options: PrepaintComposerOptions = {}): voi
 		autocompleteMaxVisible: preferences.autocompleteMaxVisible,
 		imeSafeCursor: preferences.imeSafeCursor,
 	});
+	frame.fullscreen.set(preferences.fullscreen === true);
 	// Nothing would submit yet: the interactive mode lifts this once its pipeline exists.
 	frame.composer.setDisableSubmit(true);
 	// The bar and border a fresh session here will show; the interactive mode swaps in the live ones.
@@ -195,5 +196,6 @@ export function applyStartupComposerPreferences(update: PrepaintComposerPreferen
 	frame.composer.setVim(preferences.vim);
 	frame.composer.setAutocompleteMaxVisible(preferences.autocompleteMaxVisible);
 	frame.setImeSafeCursor(preferences.imeSafeCursor);
+	frame.fullscreen.set(preferences.fullscreen === true);
 	current.cache?.write(current.cwd, preferences, theme);
 }

@@ -35,6 +35,7 @@ export interface TestTerminalOptions {
 	readonly onKey?: TermBackendOptions["onKey"];
 	readonly intercept?: TermBackendOptions["intercept"];
 	readonly textSizing?: TermBackendOptions["textSizing"];
+	readonly fullscreen?: TermBackendOptions["fullscreen"];
 	/** Drive this surface (an app shell's) instead of one built from the template. */
 	readonly surface?: Surface;
 }
@@ -172,6 +173,7 @@ export function createTestTerminal(template: () => SurfaceTemplate, options: Tes
 		...(options.onKey ? { onKey: options.onKey } : {}),
 		...(options.intercept ? { intercept: options.intercept } : {}),
 		...(options.textSizing ? { textSizing: options.textSizing } : {}),
+		...(options.fullscreen ? { fullscreen: options.fullscreen } : {}),
 	});
 	backend.start();
 	const input = (event: InputEvent): void => {

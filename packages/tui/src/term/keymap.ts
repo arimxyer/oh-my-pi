@@ -49,6 +49,14 @@ export const DEFAULT_WIDGET_KEYMAP = {
 	"editor.undo": ["ctrl+-", "ctrl+_"],
 	/** Insert a new line in a multi-line editor (unhandled Ctrl+Enter, Alt+Enter and a bare LF also do). */
 	"editor.newLine": ["shift+enter", "ctrl+j"],
+	/** Scroll the fullscreen transcript a page up (`tui.fullscreen`). */
+	"transcript.pageUp": ["pageUp", "shift+pageUp"],
+	/** Scroll the fullscreen transcript a page down. */
+	"transcript.pageDown": ["pageDown", "shift+pageDown"],
+	/** Scroll the fullscreen transcript to its first row. */
+	"transcript.top": ["ctrl+home"],
+	/** Scroll the fullscreen transcript back to its tail and follow it. */
+	"transcript.bottom": ["ctrl+end"],
 } as const satisfies Record<string, readonly string[]>;
 
 /** A rebindable widget action. */

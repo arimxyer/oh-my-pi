@@ -68,6 +68,8 @@ export interface HostOptions {
 	 * (scripted replays move it themselves). Terminal renderer only.
 	 */
 	readonly clock?: Accessor<number>;
+	/** Draw the transcript as a scrollable window on the alternate screen (terminal renderer only; may change). */
+	readonly fullscreen?: Accessor<boolean>;
 	/** Driver configuration (resize policy, image budget, test streams). */
 	readonly driver?: TerminalDriverOptions;
 	/**
@@ -302,6 +304,8 @@ export async function startHost(options: HostOptions): Promise<Host> {
 	}
 
 	const frameListeners = new Set<(frame: PresentedFrame) => void>();
+	/** The mouse reporting the program asked for: a suspend's driver restart turns it on again. */
+	let mouse: MouseTracking = "off";
 	const changeListeners = new Set<() => void>();
 	/** Bumped when the renderer or what it reports (`hour12`) changes: makes `native`/`hour12` reactive. */
 	const revision = signal(0);
@@ -362,6 +366,7 @@ export async function startHost(options: HostOptions): Promise<Host> {
 				} finally {
 					if (!stopped) {
 						await driver.start();
+						driver.setMouse(mouse);
 						open();
 					}
 				}
@@ -384,6 +389,7 @@ export async function startHost(options: HostOptions): Promise<Host> {
 			...(options.frameInterval === undefined ? {} : { frameInterval: options.frameInterval }),
 			...(options.hyperlinks ? { hyperlinks: options.hyperlinks } : {}),
 			...(options.textSizing ? { textSizing: options.textSizing } : {}),
+			...(options.fullscreen ? { fullscreen: options.fullscreen } : {}),
 			...(options.clock ? { clock: options.clock } : {}),
 			...(options.onKey ? { onKey: options.onKey } : {}),
 			...(options.intercept ? { intercept: options.intercept } : {}),
@@ -422,6 +428,7 @@ export async function startHost(options: HostOptions): Promise<Host> {
 					return await run();
 				} finally {
 					await driver.start();
+					driver.setMouse(mouse);
 					driver.resetDisplay();
 					backend.start();
 				}
@@ -463,7 +470,10 @@ export async function startHost(options: HostOptions): Promise<Host> {
 			changeListeners.add(listener);
 			return () => changeListeners.delete(listener);
 		},
-		setMouse: tracking => renderer.setMouse(tracking),
+		setMouse(tracking) {
+			mouse = tracking;
+			renderer.setMouse(tracking);
+		},
 		async stop() {
 			if (stopped) return driver.stop();
 			stopped = true;

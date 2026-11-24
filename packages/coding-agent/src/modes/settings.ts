@@ -430,6 +430,21 @@ export const cfgTuiTextSizing = register({
 	},
 });
 
+export const cfgTuiFullscreen = register({
+	id: "tui.fullscreen",
+	type: "boolean",
+	default: false,
+	ui: {
+		tab: "appearance",
+		group: "Display",
+		label: "Fullscreen Transcript",
+		get description() {
+			const shift = formatKeyHint("shift");
+			return `Draw the session on the alternate screen and scroll the transcript inside omp (mouse wheel, Page Up/Page Down, Ctrl+Home/Ctrl+End) instead of in terminal scrollback. The whole transcript is written to scrollback on exit. Captures the mouse, so native text selection becomes ${shift}+drag`;
+		},
+	},
+});
+
 export const cfgTuiColorfulMarkdown = register({
 	id: "tui.colorfulMarkdown",
 	type: "boolean",

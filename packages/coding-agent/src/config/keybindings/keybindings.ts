@@ -74,6 +74,10 @@ const WIDGET_ACTIONS: Readonly<Record<WidgetAction, Keybinding>> = {
 	"editor.yankPop": "tui.editor.yankPop",
 	"editor.undo": "tui.editor.undo",
 	"editor.newLine": "tui.input.newLine",
+	"transcript.pageUp": "tui.transcript.pageUp",
+	"transcript.pageDown": "tui.transcript.pageDown",
+	"transcript.top": "tui.transcript.top",
+	"transcript.bottom": "tui.transcript.bottom",
 };
 
 function isKeybinding(id: string): id is Keybinding {

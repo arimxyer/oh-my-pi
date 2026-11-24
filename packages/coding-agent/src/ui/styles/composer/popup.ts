@@ -1,6 +1,6 @@
 /**
  * The composer's completion popup in the terminal (`overlay` with role
- * `omp.autocomplete` → `col omp.select` → `list` of `item`s), drawn under
+ * `omp.autocomplete` → `col omp.select` → `list` of `item`s), drawn above
  * the field as a select list:
  *
  * - the selected row in the accent, the others indented; when any item has a

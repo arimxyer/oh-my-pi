@@ -84,4 +84,26 @@ describe("Host.setMouse", () => {
 			surface.dispose();
 		}
 	});
+
+	it("turns the requested mouse reporting on again after a suspend", async () => {
+		const term = memoryTerminal({ columns: 20, rows: 6 });
+		const surface = createSurface(() => ({ main: <rows lines={["a"]} /> }));
+		const host = await startHost({
+			surface,
+			theme: () => loadThemeSync("dark"),
+			native: false,
+			driver: term.options,
+		});
+		try {
+			host.setMouse("click");
+			const before = term.output.length;
+			await host.suspend(async () => {});
+			const after = term.output.slice(before).join("");
+			// The suspend's stop turns reporting off; the restart must turn it back on, after that.
+			expect(after.lastIndexOf("\x1b[?1000h")).toBeGreaterThan(after.lastIndexOf("\x1b[?1000l"));
+		} finally {
+			await host.stop();
+			surface.dispose();
+		}
+	});
 });

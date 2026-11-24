@@ -331,6 +331,7 @@ import {
 	cfgTuiMaxInlineImages,
 	cfgTuiAutoGraph,
 	cfgTuiMouse,
+	cfgTuiFullscreen,
 	cfgTuiColorfulMarkdown,
 	cfgTuiRenderMermaid,
 	cfgTuiRenderEmbeds,
@@ -497,6 +498,7 @@ const cfgLiveUiSettings = combine({
 	"extensionRenderers.transcriptPresenters": cfgExtensionTranscriptPresenters,
 	"tui.autoGraph": cfgTuiAutoGraph,
 	"tui.textSizing": cfgTuiTextSizing,
+	"tui.fullscreen": cfgTuiFullscreen,
 	"tui.tight": cfgTuiTight,
 	"tui.hyperlinks": cfgTuiHyperlinks,
 	"tui.titleState": cfgTuiTitleState,
@@ -1769,6 +1771,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		const hyperlinks = cfgTuiHyperlinks.get(this.settings);
 		this.#frame.hyperlinks.set(hyperlinks === "off" ? false : hyperlinks === "always" ? true : undefined);
 		this.#frame.textSizing.set(cfgTuiTextSizing.get(this.settings));
+		this.#frame.fullscreen.set(cfgTuiFullscreen.get(this.settings));
 	}
 
 	/** Follow the started host: terminal appearance, mouse, link routing, the tray, frame settings. */
@@ -3634,6 +3637,7 @@ export class InteractiveMode implements InteractiveModeContext {
 			this.#syncFrameSettings();
 			resetDisplay = true;
 		}
+		if (any("tui.fullscreen")) this.#syncFrameSettings();
 		if (any("tui.titleState")) setTerminalTitleStateEnabled(cfgTuiTitleState.get(this.settings));
 		if (any("tui.titleSpinner")) setTerminalTitleSpinnerStyle(cfgTuiTitleSpinner.get(this.settings));
 		if (any("terminal.programStatus")) setProgramStatusEnabled(cfgTerminalProgramStatus.get(this.settings));

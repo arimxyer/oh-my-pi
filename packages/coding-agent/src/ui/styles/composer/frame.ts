@@ -1,7 +1,7 @@
 /**
  * The composer in the terminal (`col` nodes with role `omp.editor` and
  * `omp.editor.<state>`): its text field inside the chrome of the composer's
- * shape, the completion popup under it.
+ * shape, the completion popup above it.
  *
  * The field (`line` row → `editor`) is painted at the wrap width the shape
  * leaves, plus the padding cell an end-of-row caret may take; each of its
@@ -128,12 +128,13 @@ function paintComposer(node: UiNode, cx: PaintContext): Block {
 	const bottom = shape.bottom?.(chrome);
 	if (bottom !== undefined) rows.push(bottom);
 
-	// The popup covers the transcript above the composer rather than taking room from it.
+	// The popup sits above the composer, covering the transcript rather than taking room from it.
 	const popup = node.children().find(child => child.kind === "overlay");
 	const covering = popup ? cx.paint(popup, cx.width).rows : [];
-	rows.push(...covering);
+	const drawn = covering.length > 0 ? [...covering, ...rows] : rows;
+	if (cursor) cursor = { row: cursor.row + covering.length, col: cursor.col };
 	return {
-		rows: term.faint ? rows.map(faint) : rows,
+		rows: term.faint ? drawn.map(faint) : drawn,
 		...(covering.length > 0 ? { covering: covering.length } : {}),
 		...(cursor ? { cursor } : {}),
 	};

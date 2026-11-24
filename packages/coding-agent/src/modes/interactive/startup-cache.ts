@@ -55,6 +55,8 @@ export interface StartupPreferences {
 	readonly autocompleteMaxVisible: number;
 	readonly vim: boolean;
 	readonly imeSafeCursor: boolean;
+	/** `tui.fullscreen` (absent in rows older caches wrote: off). */
+	readonly fullscreen?: boolean;
 }
 
 /** What the cache knows for a project. */
@@ -95,7 +97,8 @@ function parseUi(
 	value: unknown,
 ): { readonly preferences: StartupPreferences; readonly theme: ComposerThemePreferences } | undefined {
 	if (!isRecord(value) || !isRecord(value.preferences) || !isRecord(value.theme)) return undefined;
-	const { quiet, composerShape, resizeScrollback, autocompleteMaxVisible, vim, imeSafeCursor } = value.preferences;
+	const { quiet, composerShape, resizeScrollback, autocompleteMaxVisible, vim, imeSafeCursor, fullscreen } =
+		value.preferences;
 	const scrollback = typeof resizeScrollback === "string" ? RESIZE_SCROLLBACK[resizeScrollback] : undefined;
 	if (
 		typeof quiet !== "boolean" ||
@@ -103,7 +106,8 @@ function parseUi(
 		!scrollback ||
 		typeof autocompleteMaxVisible !== "number" ||
 		typeof vim !== "boolean" ||
-		(typeof imeSafeCursor !== "boolean" && imeSafeCursor !== undefined)
+		(typeof imeSafeCursor !== "boolean" && imeSafeCursor !== undefined) ||
+		(fullscreen !== undefined && typeof fullscreen !== "boolean")
 	) {
 		return undefined;
 	}
@@ -124,6 +128,7 @@ function parseUi(
 			autocompleteMaxVisible,
 			vim,
 			imeSafeCursor: imeSafeCursor === true,
+			...(fullscreen === undefined ? {} : { fullscreen }),
 		},
 		theme: { symbolPreset, colorBlindMode, darkTheme, lightTheme } as ComposerThemePreferences,
 	};
