@@ -64,6 +64,15 @@ else
 fi
 
 label() { git describe --tags --match 'v[0-9]*' "$1"; }
+# Push the branch unless origin already has it, leasing against what origin holds now (this clone
+# keeps no origin/* tracking refs, so a bare --force-with-lease would always be stale).
+push_branch() {
+	local remote
+	remote="$(git ls-remote origin "refs/heads/$branch" | cut -f1)"
+	if [ "$remote" != "$(git rev-parse "$branch")" ]; then
+		git push --force-with-lease="$branch:$remote" origin "$branch"
+	fi
+}
 # The branch commit the last successful run installed: a run that failed after its rebase (or a
 # conflict resolved by hand) leaves the branch newer than what is installed.
 state="$(git rev-parse --git-path omp-update-installed)"
@@ -77,6 +86,8 @@ if [ "$target" = "$base" ] && [ "$installed" = "$head" ] && [ "$force" = 0 ]; th
 	else
 		echo "Up to date."
 	fi
+	# A run whose push failed (offline, rejected) installed fine: push what origin still lacks.
+	if [ "$push" = 1 ] && [ "$check" = 0 ]; then push_branch; fi
 	exit 0
 fi
 if [ "$target" = "$base" ] && [ "$installed" != "$head" ]; then
@@ -119,4 +130,4 @@ install -m 755 "$built" "$install_path"
 echo "Installed the patched omp ($(label HEAD)) at $install_path"
 git rev-parse HEAD >"$state"
 
-if [ "$push" = 1 ]; then git push --force-with-lease origin "$branch"; fi
+if [ "$push" = 1 ]; then push_branch; fi
