@@ -64,14 +64,26 @@ else
 fi
 
 label() { git describe --tags --match 'v[0-9]*' "$1"; }
-# Push the branch unless origin already has it, leasing against what origin holds now (this clone
-# keeps no origin/* tracking refs, so a bare --force-with-lease would always be stale).
-push_branch() {
-	local remote
+# What origin's branch may hold without losing work: nothing yet, the local tip or an ancestor of it,
+# or the tip this clone last published or rebased away from (recorded, since a rebase leaves it behind).
+# Anything else came from elsewhere (another machine): refuse rather than force over it.
+published="$(git rev-parse --git-path omp-update-published)"
+if [ "$push" = 1 ] && [ "$check" = 0 ]; then
 	remote="$(git ls-remote origin "refs/heads/$branch" | cut -f1)"
+	known="$(cat "$published" 2>/dev/null || true)"
+	if [ -n "$remote" ] && [ "$remote" != "$known" ] && ! git merge-base --is-ancestor "$remote" "$branch" 2>/dev/null; then
+		echo "omp-update: origin/$branch ($(printf '%.10s' "$remote")) has commits this clone lacks." >&2
+		echo "Bring them in first (git fetch origin $branch, then merge or rebase), or run with --no-push." >&2
+		exit 1
+	fi
+	printf '%s\n' "$remote" >"$published"
+fi
+# Force-push the rebased branch, leasing against the tip checked above.
+push_branch() {
 	if [ "$remote" != "$(git rev-parse "$branch")" ]; then
 		git push --force-with-lease="$branch:$remote" origin "$branch"
 	fi
+	git rev-parse "$branch" >"$published"
 }
 # The branch commit the last successful run installed: a run that failed after its rebase (or a
 # conflict resolved by hand) leaves the branch newer than what is installed.
