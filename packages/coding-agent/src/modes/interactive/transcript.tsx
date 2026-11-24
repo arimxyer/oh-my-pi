@@ -433,9 +433,8 @@ export class TranscriptPresenter {
 	/** Fold or unfold the newest tool card alone (as a click on its header does); false when there is none. */
 	toggleNewestTool(): boolean {
 		const call = this.#newestTool;
-		if (!call) return false;
-		call.toggle(untrack(call.state).expanded);
-		return true;
+		call?.toggleShown();
+		return call !== undefined;
 	}
 
 	#presentCard(spec: ToolCallSpec, builtIn: boolean, before: TranscriptBlock | undefined): PendingTool {

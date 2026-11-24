@@ -277,6 +277,14 @@ export class ToolCall {
 		this.#fold.set(collapsed);
 	}
 
+	/**
+	 * Flip what the card draws, as a click on its header does: its full body, or its preview. A running
+	 * write/edit draws its streaming tail while not expanded, though its fold prop reads open.
+	 */
+	toggleShown(): void {
+		this.toggle(untrack(this.state).expanded);
+	}
+
 	/** No more events will arrive (turn over, or aborted while running). */
 	seal(): void {
 		if (this.#sealed.peek()) return;

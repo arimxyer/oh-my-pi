@@ -27,7 +27,7 @@ import { terminalPaddingX } from "../terminal-padding";
 import { tint, tintRow } from "./default";
 import { imageLink, resultPictures } from "./file-common";
 import { bodySpans, paintPresenterRows } from "../figures/presented";
-import { isExpanded, lookFor, type ToolProps, toolProps } from "./look";
+import { lookFor, type ToolProps, toolProps } from "./look";
 
 /** `cx` with some fields replaced (its getters keep reading the paint environment). */
 function withContext(
@@ -221,7 +221,9 @@ defineRoleWidget(
 				return false;
 			const props = toolProps(node);
 			if (!props.collapsible) return false;
-			cx.emit({ type: "toggle", key: cx.keypath, collapsed: isExpanded(props) });
+			// What the card draws in full (`term.expanded`), not its fold prop: a running write/edit's
+			// streaming tail reads open there.
+			cx.emit({ type: "toggle", key: cx.keypath, collapsed: props.term?.expanded === true });
 			return true;
 		},
 	},

@@ -68,4 +68,29 @@ describe("tool card fold", () => {
 			term.dispose();
 		}
 	});
+
+	it("expands a running write's streaming tail on the first click or toggle, and goes back on the second", () => {
+		const content = Array.from({ length: 40 }, (_, i) => `streamed ${i}`).join("\n");
+		const call = new ToolCall({ id: "w", name: "write", args: { path: "out.txt", content } });
+		call.setArgsComplete();
+		call.setExecutionStarted();
+		const term = createTestTerminal(() => ({ main: [<ToolBlock call={call} />] }), { columns: 60, rows: 200 });
+		try {
+			const shown = () => term.screen().filter(row => row.includes("streamed")).length;
+			const tail = shown();
+			expect(tail).toBeLessThan(40);
+			const header = term.screen().findIndex(row => row.trim() !== "");
+			term.mouse({ row: header, col: 2, button: "left", action: "press", mods: [] });
+			expect(shown()).toBe(40);
+			// The newest-card key's path.
+			call.toggleShown();
+			term.render();
+			expect(shown()).toBe(tail);
+			call.toggleShown();
+			term.render();
+			expect(shown()).toBe(40);
+		} finally {
+			term.dispose();
+		}
+	});
 });
