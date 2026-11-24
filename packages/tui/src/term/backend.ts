@@ -50,6 +50,14 @@ import {
 } from "./paint";
 import { widgetKeyMatches, widgetKeys } from "./keymap";
 import { scrollTranscript, type TranscriptAnchor, type TranscriptRows, transcriptWindow } from "./transcript-window";
+import {
+	highlightSelection,
+	pointAt,
+	selectionText,
+	type TranscriptPoint,
+	type WindowRowMap,
+	windowRowMap,
+} from "./transcript-selection";
 import { type WidgetContext, widgetContext, widgetFor } from "./widgets";
 import "./painters";
 
@@ -97,6 +105,11 @@ export interface TermBackendOptions {
 	 * terminal comes back as it was (like `vim`). May change at runtime. Default: off.
 	 */
 	readonly fullscreen?: Accessor<boolean>;
+	/**
+	 * Text the user selected in the fullscreen transcript by dragging, on release (copy it). Absent:
+	 * the selection is drawn but copies nothing.
+	 */
+	readonly onCopy?: (text: string) => void;
 }
 
 /** A history batch offered to the driver until it acknowledges the id. */
@@ -351,6 +364,12 @@ export class TermBackend {
 	#running = false;
 	/** The fullscreen transcript's top row while scrolled away from the tail; null follows the tail. */
 	#anchor: TranscriptAnchor | null = null;
+	/** The fullscreen transcript's mouse selection; `pointer` (a window cell) while the button is held. */
+	#selection: { anchor: TranscriptPoint; focus: TranscriptPoint; pointer?: { row: number; col: number } } | undefined;
+	/** The transcript row each row of the last fullscreen window showed. */
+	#windowMap: WindowRowMap = [];
+	/** Window rows the last frame's covering dock rows hid at its top (screen row + this = window row). */
+	#windowHidden = 0;
 	/** Rows of the last fullscreen transcript window (a page). */
 	#windowRows = 0;
 
@@ -737,10 +756,21 @@ export class TermBackend {
 
 		if (!flush && this.#options.fullscreen?.()) {
 			const capacity = Math.max(0, height - dockRows + covering);
-			const view = transcriptWindow(this.#transcriptRows(width), this.#anchor, capacity);
+			const source = this.#transcriptRows(width);
+			const view = transcriptWindow(source, this.#anchor, capacity);
 			this.#anchor = view.anchor;
 			this.#windowRows = capacity;
 			const rows = view.rows;
+			const map = windowRowMap(source, view.blocks, capacity);
+			this.#windowMap = map;
+			const selection = this.#selection;
+			// While the button is held the selection ends under the pointer, wherever the window scrolled.
+			if (selection?.pointer) {
+				selection.focus = pointAt(map, selection.pointer.row, selection.pointer.col) ?? selection.focus;
+			}
+			if (selection && !highlightSelection(rows, map, source, selection.anchor, selection.focus)) {
+				this.#selection = undefined;
+			}
 			for (const { block, top } of view.blocks) {
 				const caret = block.cursor;
 				if (caret && top + caret.row >= 0 && top + caret.row < capacity && this.#surface.focused())
@@ -764,6 +794,7 @@ export class TermBackend {
 			}
 			// Covering dock rows (a completion popup) draw over the window's last rows.
 			const hidden = Math.max(0, rows.length - height);
+			this.#windowHidden = hidden;
 			if (hidden > 0) {
 				rows.splice(0, hidden);
 				if (cursor) cursor = cursor.row >= hidden ? { row: cursor.row - hidden, col: cursor.col } : null;
@@ -1148,6 +1179,8 @@ export class TermBackend {
 	}
 
 	#onKey(key: KeyEvent): void {
+		// A key ends a finished selection (its text was copied on release).
+		if (this.#selection && !this.#selection.pointer && key.kind !== "release") this.#selection = undefined;
 		const focused = this.#surface.focused();
 		const transcript = this.#transcriptKeys(key, focused);
 		// Enter in the composer follows the transcript's tail again (whoever handles it).
@@ -1166,6 +1199,8 @@ export class TermBackend {
 	#onMouse(mouse: MouseEvent): void {
 		if (this.#surface.layer() !== this.#hitLayer) {
 			this.clearHover();
+			// A layer opened under a held selection: it ends (its release may never come here).
+			if (this.#selection?.pointer) this.#selection = undefined;
 			return;
 		}
 		const viewportRow = this.#driver.viewportRow ? this.#driver.viewportRow(mouse.row) : mouse.row;
@@ -1174,6 +1209,35 @@ export class TermBackend {
 			return;
 		}
 		this.#trackHover(viewportRow, mouse.col);
+		const windowRow = viewportRow + this.#windowHidden;
+		const selection = this.#selection;
+		if (selection?.pointer && (mouse.action === "release" || (mouse.action === "drag" && mouse.button === "left"))) {
+			if (mouse.action === "drag") {
+				selection.pointer = { row: Math.min(windowRow, this.#windowRows - 1), col: mouse.col };
+				// At the window's edges the transcript scrolls under the pointer, one row per report.
+				if (windowRow <= 0) this.#scrollTranscript(-1);
+				else if (windowRow >= this.#windowRows - 1) this.#scrollTranscript(1);
+				return;
+			}
+			selection.pointer = undefined;
+			// Reports arrive faster than frames: the last frame's window may predate this drag's scrolling,
+			// so the release cell is resolved against the window as it stands now.
+			const source = this.#transcriptRows(Math.max(1, this.#driver.columns));
+			const view = transcriptWindow(source, this.#anchor, this.#windowRows);
+			const row = Math.min(windowRow, this.#windowRows - 1);
+			selection.focus =
+				pointAt(windowRowMap(source, view.blocks, this.#windowRows), row, mouse.col) ?? selection.focus;
+			const { anchor, focus } = selection;
+			if (anchor.node === focus.node && anchor.offset === focus.offset && anchor.col === focus.col) {
+				// A click, not a drag: nothing selected.
+				this.#selection = undefined;
+				return;
+			}
+			const text = selectionText(source, anchor, focus);
+			if (text.trim()) this.#options.onCopy?.(text);
+			return;
+		}
+		if (mouse.action === "press" && mouse.button === "left") this.#selection = undefined;
 		for (let i = this.#hits.length - 1; i >= 0; i--) {
 			const { hit, top, left } = this.#hits[i]!;
 			const row = viewportRow - top - hit.row;
@@ -1192,13 +1256,16 @@ export class TermBackend {
 				return;
 			}
 		}
-		// Wheel ticks no hit consumed scroll the fullscreen transcript (over its window).
-		if (
-			(mouse.button === "wheel-up" || mouse.button === "wheel-down") &&
-			this.#fullscreenTranscript() &&
-			viewportRow < this.#windowRows &&
-			!this.#surface.layer().some(isFullscreen)
-		) {
+		const overWindow =
+			this.#fullscreenTranscript() && windowRow < this.#windowRows && !this.#surface.layer().some(isFullscreen);
+		// A left press no hit consumed starts a selection in the fullscreen transcript.
+		if (overWindow && mouse.action === "press" && mouse.button === "left") {
+			const point = pointAt(this.#windowMap, windowRow, mouse.col);
+			if (point) this.#selection = { anchor: point, focus: point, pointer: { row: windowRow, col: mouse.col } };
+			return;
+		}
+		// Wheel ticks no hit consumed scroll it (a held selection follows the pointer).
+		if (overWindow && (mouse.button === "wheel-up" || mouse.button === "wheel-down")) {
 			this.#scrollTranscript(mouse.button === "wheel-up" ? -WHEEL_ROWS : WHEEL_ROWS);
 		}
 	}

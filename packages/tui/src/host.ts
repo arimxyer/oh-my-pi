@@ -70,6 +70,8 @@ export interface HostOptions {
 	readonly clock?: Accessor<number>;
 	/** Draw the transcript as a scrollable window on the alternate screen (terminal renderer only; may change). */
 	readonly fullscreen?: Accessor<boolean>;
+	/** Text selected in the fullscreen transcript, on mouse release (terminal renderer only). */
+	readonly onCopy?: (text: string) => void;
 	/** Driver configuration (resize policy, image budget, test streams). */
 	readonly driver?: TerminalDriverOptions;
 	/**
@@ -390,6 +392,7 @@ export async function startHost(options: HostOptions): Promise<Host> {
 			...(options.hyperlinks ? { hyperlinks: options.hyperlinks } : {}),
 			...(options.textSizing ? { textSizing: options.textSizing } : {}),
 			...(options.fullscreen ? { fullscreen: options.fullscreen } : {}),
+			...(options.onCopy ? { onCopy: options.onCopy } : {}),
 			...(options.clock ? { clock: options.clock } : {}),
 			...(options.onKey ? { onKey: options.onKey } : {}),
 			...(options.intercept ? { intercept: options.intercept } : {}),

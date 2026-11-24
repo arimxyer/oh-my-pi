@@ -1,7 +1,13 @@
 /** @jsxImportSource @oh-my-pi/pi-tui */
 import { describe, expect, it, vi } from "bun:test";
 import { signal } from "@oh-my-pi/pi-tui";
-import type { FramePlan, InputEvent, TerminalCapabilities, TerminalDriver } from "@oh-my-pi/pi-tui/driver/contract";
+import type {
+	FramePlan,
+	InputEvent,
+	MouseEvent,
+	TerminalCapabilities,
+	TerminalDriver,
+} from "@oh-my-pi/pi-tui/driver/contract";
 import { createSurface, settle } from "@oh-my-pi/pi-tui/surface";
 import { TermBackend } from "@oh-my-pi/pi-tui/term/backend";
 import { defineRolePainter } from "@oh-my-pi/pi-tui/term/paint";
@@ -633,6 +639,7 @@ describe("TermBackend main surface", () => {
 describe("TermBackend fullscreen transcript", () => {
 	function fullscreenSetup(main: () => unknown) {
 		const driver = new FakeDriver();
+		const copied: string[] = [];
 		const surface = createSurface(() => ({ main: main() as never, dock: <rows key="dock" lines={["dock"]} /> }));
 		const backend = new TermBackend({
 			surface,
@@ -640,6 +647,7 @@ describe("TermBackend fullscreen transcript", () => {
 			theme: () => PLAIN_THEME,
 			separator: () => 0,
 			fullscreen: () => true,
+			onCopy: text => copied.push(text),
 		});
 		backend.start();
 		const screen = (): string[] => driver.frames.at(-1)!.fullscreen!.map(row => stripEscapes(row).trimEnd());
@@ -648,7 +656,9 @@ describe("TermBackend fullscreen transcript", () => {
 			backend.renderNow();
 		};
 		const press = (id: string): void => send({ type: "key", key: { id, kind: "press", raw: "" } });
-		return { driver, backend, screen, press, send };
+		const mouse = (row: number, col: number, button: MouseEvent["button"], action: MouseEvent["action"]): void =>
+			send({ type: "mouse", mouse: { row, col, button, action, mods: [] } });
+		return { driver, backend, screen, press, send, mouse, copied };
 	}
 
 	it("scrolls inside the window, holds the view while content arrives below, and leaves nothing behind on exit", () => {
@@ -702,5 +712,54 @@ describe("TermBackend fullscreen transcript", () => {
 		// Nothing to scroll: Page Up leaves it following.
 		press("pageUp");
 		expect(screen()).toEqual(["a0", "a1", "", "", "", "dock"]);
+	});
+
+	it("selects by dragging, draws the selection, and copies it on release; a click copies nothing", () => {
+		const { driver, mouse, copied } = fullscreenSetup(() => [
+			<rows key="a" lines={lines("a", 6)} />,
+			<rows key="b" lines={lines("b", 4)} />,
+		]);
+		// Window: a5 b0 b1 b2 b3 over the dock.
+		mouse(0, 1, "left", "press");
+		mouse(2, 0, "left", "drag");
+		expect(driver.frames.at(-1)!.fullscreen![0]).toContain("\x1b[7m");
+		expect(driver.frames.at(-1)!.fullscreen![3]).not.toContain("\x1b[7m");
+		mouse(2, 0, "left", "release");
+		expect(copied).toEqual(["5\nb0\nb"]);
+
+		mouse(1, 0, "left", "press");
+		mouse(1, 0, "left", "release");
+		expect(copied).toHaveLength(1);
+		expect(driver.frames.at(-1)!.fullscreen!.some(row => row.includes("\x1b[7m"))).toBe(false);
+	});
+
+	it("grows a held selection past the window as the wheel and the top edge scroll", () => {
+		const { screen, mouse, copied } = fullscreenSetup(() => [
+			<rows key="a" lines={lines("a", 6)} />,
+			<rows key="b" lines={lines("b", 4)} />,
+		]);
+		mouse(4, 1, "left", "press");
+		// Three rows up under the held button, then one more at the window's top edge.
+		mouse(4, 1, "wheel-up", "press");
+		mouse(0, 0, "left", "drag");
+		expect(screen()[0]).toBe("a1");
+		mouse(0, 0, "left", "release");
+		expect(copied).toEqual([[...lines("a", 6).slice(1), ...lines("b", 4)].join("\n")]);
+	});
+
+	it("copies to the release cell when press, drag and release arrive within one frame", () => {
+		const { driver, backend, copied } = fullscreenSetup(() => [
+			<rows key="a" lines={lines("a", 6)} />,
+			<rows key="b" lines={lines("b", 4)} />,
+		]);
+		backend.renderNow();
+		const report = (row: number, col: number, button: MouseEvent["button"], action: MouseEvent["action"]): void =>
+			driver.input!({ type: "mouse", mouse: { row, col, button, action, mods: [] } });
+		// No frame between the reports: the wheel and the edge scroll four rows before the release.
+		report(4, 1, "left", "press");
+		report(4, 1, "wheel-up", "press");
+		report(0, 0, "left", "drag");
+		report(0, 0, "left", "release");
+		expect(copied).toEqual([[...lines("a", 6).slice(1), ...lines("b", 4)].join("\n")]);
 	});
 });

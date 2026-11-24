@@ -117,6 +117,8 @@ export class AppFrame {
 	readonly textSizing: Signal<boolean> = signal(false);
 	/** `tui.fullscreen`: the transcript as a scrollable window on the alternate screen. */
 	readonly fullscreen: Signal<boolean> = signal(false);
+	/** Text dragged over in the fullscreen transcript (the interactive mode copies it). */
+	onCopy: ((text: string) => void) | undefined;
 	readonly #shape: Signal<string>;
 	readonly #quiet: Signal<boolean>;
 	/** Tip rolls, latched when the frame is built so the tip stays put for the session. */
@@ -189,6 +191,7 @@ export class AppFrame {
 			hyperlinks: this.hyperlinks,
 			textSizing: this.textSizing,
 			fullscreen: this.fullscreen,
+			onCopy: text => this.onCopy?.(text),
 			...(this.#terminal?.clock ? { clock: this.#terminal.clock } : {}),
 		});
 		if (options.clearHistory) this.shell.host?.replayHistory();

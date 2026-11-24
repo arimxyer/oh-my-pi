@@ -72,9 +72,12 @@ export interface ShellStartOptions {
 	readonly textSizing?: Accessor<boolean>;
 	/**
 	 * Draw the transcript as a scrollable window on the alternate screen (`tui.fullscreen`). Mouse
-	 * reporting stays on at least for clicks and wheel ticks while it is, so the wheel scrolls it.
+	 * reporting stays on at least for clicks, drags and wheel ticks while it is, so the wheel
+	 * scrolls it and a drag selects in it.
 	 */
 	readonly fullscreen?: Accessor<boolean>;
+	/** Text dragged over in the fullscreen transcript, on release. */
+	readonly onCopy?: (text: string) => void;
 	/** The terminal clock painters read (scripted replays); default the wall clock. */
 	readonly clock?: Accessor<number>;
 }
@@ -167,6 +170,7 @@ export class Shell {
 			...(options.hyperlinks ? { hyperlinks: options.hyperlinks } : {}),
 			...(options.textSizing ? { textSizing: options.textSizing } : {}),
 			...(options.fullscreen ? { fullscreen: options.fullscreen } : {}),
+			...(options.onCopy ? { onCopy: options.onCopy } : {}),
 			...(options.clock ? { clock: options.clock } : {}),
 			beforeTerminalRenderer: ensureTerminalStylesLoaded,
 		});
@@ -174,7 +178,7 @@ export class Shell {
 		this.#unwatchMouse = createRoot(dispose => {
 			effect(() => {
 				const inline = this.#inlineMouse();
-				host.setMouse(this.overlays.mouse() ?? (inline === "off" && options.fullscreen?.() ? "click" : inline));
+				host.setMouse(this.overlays.mouse() ?? (inline === "off" && options.fullscreen?.() ? "drag" : inline));
 			});
 			return dispose;
 		});

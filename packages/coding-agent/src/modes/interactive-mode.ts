@@ -1819,6 +1819,12 @@ export class InteractiveMode implements InteractiveModeContext {
 			untrack(() => this.shell.host?.replayHistory());
 		});
 		this.shell.setInlineMouse(this.#mouseCapture ? "any" : "off");
+		this.#frame.onCopy = text =>
+			copyToClipboard(text).then(
+				() => this.showStatus(`Copied ${text.split("\n").length} line${text.includes("\n") ? "s" : ""}`),
+				(error: unknown) =>
+					this.showWarning(`Copy failed: ${error instanceof Error ? error.message : String(error)}`),
+			);
 		// Tern routes link clicks and draws the tray itself: follow it as it comes and goes.
 		this.#effect(() => {
 			this.shell.native();
