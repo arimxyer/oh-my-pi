@@ -673,6 +673,14 @@ export class InputController {
 			this.toggleToolOutputExpansion();
 			return true;
 		}
+		if (km.matches(key, "app.tools.toggleLatest")) {
+			if (this.ctx.hideToolActivity) {
+				this.toggleToolOutputExpansion();
+				return true;
+			}
+			if (!this.ctx.toggleNewestToolCard()) this.ctx.showStatus("No tool card to fold");
+			return true;
+		}
 		return false;
 	}
 

@@ -8458,6 +8458,10 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.#inputController.toggleToolOutputExpansion();
 	}
 
+	toggleNewestToolCard(): boolean {
+		return this.#presenter.toggleNewestTool();
+	}
+
 	setToolsExpanded(expanded: boolean): void {
 		this.#inputController.setToolsExpanded(expanded);
 	}

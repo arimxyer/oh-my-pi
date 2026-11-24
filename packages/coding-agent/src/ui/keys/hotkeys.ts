@@ -95,6 +95,7 @@ export function hotkeyGroups(keybindings: KeybindingsManager): HotkeyGroup[] {
 				{ keys: [act("app.plan.toggle")], action: "Toggle plan mode" },
 				{ keys: [act("app.history.search")], action: "Search prompt history" },
 				{ keys: [act("app.tools.expand")], action: "Toggle tool output expansion" },
+				{ keys: [act("app.tools.toggleLatest")], action: "Fold or unfold the newest tool card" },
 				{ keys: [act("app.tools.toggleVisibility")], action: "Toggle tool activity visibility" },
 				{
 					keys: [act("app.links.hint")],

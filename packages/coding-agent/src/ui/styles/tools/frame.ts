@@ -129,7 +129,7 @@ export function frameRows(theme: Theme, width: number, spec: FrameSpec, rowTags?
 
 /** The bracketed hint to expand tool output, dim. */
 export function expandHint(theme: Theme): string {
-	return theme.fg("dim", bracketed(theme, `${expandKeyLabel(theme)}: Expand`));
+	return theme.fg("dim", bracketed(theme, expandHintText(theme)));
 }
 
 /** A hidden line count followed by the tool expansion hint, dim. */
@@ -270,6 +270,11 @@ export function tailRows(theme: Theme, lines: readonly string[], limit: number, 
 /** `⟦text⟧` with the theme's brackets. */
 export function bracketed(theme: Theme, text: string): string {
 	return `${theme.symbols.symbol("format.bracketLeft")}${text}${theme.symbols.symbol("format.bracketRight")}`;
+}
+
+/** How a collapsed card says it opens: a click on its header (that card), or the expand key (every card). */
+export function expandHintText(theme: Theme): string {
+	return `click or ${expandKeyLabel(theme)}: Expand`;
 }
 
 /** Collapsed command/code previews show at most this many rows (the viewport tail window). */

@@ -23,6 +23,7 @@ import {
 	type JSXNode,
 	type Signal,
 	signal,
+	onCleanup,
 	untrack,
 } from "@oh-my-pi/pi-tui";
 import { stripEscapes } from "@oh-my-pi/pi-tui/text/ansi";
@@ -154,6 +155,8 @@ export class TranscriptPresenter {
 	#pendingRuns: PendingRun[] = [];
 	/** The last prompt drawn with no reply after it yet: the next reply's opening emoji reacts on it. */
 	#reactionTarget: Signal<string | undefined> | undefined;
+	/** The newest tool card still in the transcript (`app.tools.toggleLatest` folds it). */
+	#newestTool: ToolCall | undefined;
 
 	constructor(host: PresenterHost) {
 		this.#host = host;
@@ -427,6 +430,14 @@ export class TranscriptPresenter {
 		return pending;
 	}
 
+	/** Fold or unfold the newest tool card alone (as a click on its header does); false when there is none. */
+	toggleNewestTool(): boolean {
+		const call = this.#newestTool;
+		if (!call) return false;
+		call.toggle(untrack(call.state).expanded);
+		return true;
+	}
+
 	#presentCard(spec: ToolCallSpec, builtIn: boolean, before: TranscriptBlock | undefined): PendingTool {
 		const { display } = this.#host;
 		const renderer = builtIn ? undefined : legacyRenderer(spec.tool);
@@ -452,6 +463,8 @@ export class TranscriptPresenter {
 		const editMode = toolEditMode(spec.name, spec.tool);
 		if (editMode) call.setRenderContext({ editMode });
 		const presentedId = signal(spec.id);
+		// A card placed above others (`before`) is not the newest.
+		if (!before) this.#newestTool = call;
 		const factory = () => {
 			effect(() => {
 				const value = display.toolOutputExpanded();
@@ -487,6 +500,9 @@ export class TranscriptPresenter {
 				const result = call.facts.result();
 				return result && !call.facts.partial() ? this.#spotlightNotice(call.id, result) : undefined;
 			};
+			onCleanup(() => {
+				if (this.#newestTool === call) this.#newestTool = undefined;
+			});
 			return [<ToolBlock call={call} />, notice];
 		};
 		const block = this.#mount(factory, { before, compact: () => call.facts.presentation() !== "full" });

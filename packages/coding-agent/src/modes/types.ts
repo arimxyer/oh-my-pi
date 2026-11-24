@@ -1096,6 +1096,8 @@ export interface InteractiveModeContext {
 	cycleThinkingLevel(): void;
 	cycleRoleModel(direction?: "forward" | "backward"): Promise<void>;
 	toggleToolOutputExpansion(): void;
+	/** Fold or unfold the newest tool card alone; false when the transcript has none. */
+	toggleNewestToolCard(): boolean;
 	setToolsExpanded(expanded: boolean): void;
 	toggleThinkingBlockVisibility(): void;
 	handlePlanModeCommand(
