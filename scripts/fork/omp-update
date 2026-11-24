@@ -45,6 +45,10 @@ repo="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../.." && pwd)"
 branch="${OMP_PATCH_BRANCH:-patches/fullscreen}"
 cd "$repo"
 
+if [ -d "$(git rev-parse --git-path rebase-merge)" ] || [ -d "$(git rev-parse --git-path rebase-apply)" ]; then
+	echo "omp-update: a rebase is in progress; finish it ('git rebase --continue') or abort it first." >&2
+	exit 1
+fi
 git fetch --quiet upstream --tags
 # The patches are the commits since the branch left upstream/main's history.
 base="$(git merge-base "$branch" upstream/main)"
@@ -60,15 +64,23 @@ else
 fi
 
 label() { git describe --tags --match 'v[0-9]*' "$1"; }
+# The branch commit the last successful run installed: a run that failed after its rebase (or a
+# conflict resolved by hand) leaves the branch newer than what is installed.
+state="$(git rev-parse --git-path omp-update-installed)"
+installed="$(cat "$state" 2>/dev/null || true)"
+head="$(git rev-parse "$branch")"
 echo "patched omp base: $(label "$base")"
 echo "update target:    $(label "$target")"
-if [ "$target" = "$base" ] && [ "$force" = 0 ]; then
+if [ "$target" = "$base" ] && [ "$installed" = "$head" ] && [ "$force" = 0 ]; then
 	if [ "$track" = release ]; then
 		echo "Up to date: no release is newer than the base (--main updates to upstream/main)."
 	else
 		echo "Up to date."
 	fi
 	exit 0
+fi
+if [ "$target" = "$base" ] && [ "$installed" != "$head" ]; then
+	echo "The branch ($(git rev-parse --short "$head")) is not installed yet: it will be built and installed."
 fi
 if [ "$check" = 1 ]; then
 	if [ "$track" = main ]; then echo "An update is available: run omp-update --main."; else echo "An update is available: run omp-update."; fi
@@ -105,5 +117,6 @@ if [ -e "$install_path" ] && [ ! -e "$install_path.upstream-backup" ]; then
 fi
 install -m 755 "$built" "$install_path"
 echo "Installed the patched omp ($(label HEAD)) at $install_path"
+git rev-parse HEAD >"$state"
 
 if [ "$push" = 1 ]; then git push --force-with-lease origin "$branch"; fi
