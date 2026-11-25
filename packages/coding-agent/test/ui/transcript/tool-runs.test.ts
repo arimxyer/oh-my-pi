@@ -12,7 +12,7 @@ import {
 	renderTranscript,
 } from "../../helpers/interactive-mode-context";
 
-function bash(ctx: InteractiveModeContext, id: string, output: string): void {
+function bash(ctx: InteractiveModeContext, id: string, output: string, isError = false): void {
 	const pending = ctx.presentToolCall({
 		id,
 		name: "bash",
@@ -22,7 +22,7 @@ function bash(ctx: InteractiveModeContext, id: string, output: string): void {
 	});
 	pending.setArgsComplete(id);
 	pending.setExecutionStarted(id);
-	pending.updateResult({ content: [{ type: "text", text: output }] }, false, id);
+	pending.updateResult({ content: [{ type: "text", text: output }], isError }, false, id);
 	pending.seal();
 }
 
@@ -74,6 +74,19 @@ describe("collapsed tool activity", () => {
 		expect(shown).toContain("second-output");
 		expect(shown).not.toContain("third-output");
 		term.dispose();
+	});
+
+	it("names how many calls of a run failed, only when one did", () => {
+		const ctx = createInteractiveModeContext();
+		contextDisplay(ctx).collapseToolActivity.set(true);
+		bash(ctx, "one", "ok");
+		bash(ctx, "two", "boom", true);
+		bash(ctx, "three", "boom", true);
+		ctx.presentAssistant(reply("Between the runs."));
+		bash(ctx, "four", "ok");
+
+		const runs = renderTranscript(ctx).filter(row => row.includes("tool call"));
+		expect(runs).toEqual([expect.stringContaining("2 failed"), expect.not.stringContaining("failed")]);
 	});
 
 	it("opens every run while ctrl+o expands all, and a click still folds one", () => {

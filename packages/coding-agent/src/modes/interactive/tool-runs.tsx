@@ -3,7 +3,7 @@
  * Collapsed tool activity (`display.collapseToolActivity`): each run of tool
  * blocks (cards and read groups with no reply text, prompt or other block
  * between them) draws as one summary row at its first block, `▸ 5 tool calls
- * · bash ×3, edit ×2`, spinning while a member runs. A click on the row
+ * · bash ×3, edit ×2 · 1 failed`, spinning while a member runs. A click on the row
  * (or its fold key) shows the run's blocks in place; the row stays as their
  * header and folds them again.
  *
@@ -21,6 +21,8 @@ export interface ToolRunMember {
 	readonly names: Accessor<readonly string[]>;
 	/** Whether any of its calls still runs. */
 	readonly running: Accessor<boolean>;
+	/** How many of its calls ended in an error. */
+	readonly failed: Accessor<number>;
 }
 
 /** What {@link ToolRuns} reads from the presenter. */
@@ -198,18 +200,21 @@ export class ToolRuns {
 		const members = this.#members();
 		const counts = new Map<string, number>();
 		let running = false;
+		let failed = 0;
 		for (const member of run) {
 			const info = members.get(member);
 			if (!info) continue;
 			for (const name of info.names()) counts.set(name, (counts.get(name) ?? 0) + 1);
 			if (info.running()) running = true;
+			failed += info.failed();
 		}
 		let calls = 0;
 		for (const count of counts.values()) calls += count;
 		if (calls === 0) return undefined;
 		const shown = this.#open(block);
 		const label = `${shown ? "▾" : "▸"} ${calls} tool call${calls === 1 ? "" : "s"}`;
-		const detail = [...counts].map(([name, count]) => (count === 1 ? name : `${name} ×${count}`)).join(", ");
+		const names = [...counts].map(([name, count]) => (count === 1 ? name : `${name} ×${count}`)).join(", ");
+		const detail = failed > 0 ? `${names} · ${failed} failed` : names;
 		return (
 			<tool
 				key="tool-run"

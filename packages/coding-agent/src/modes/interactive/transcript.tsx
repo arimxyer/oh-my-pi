@@ -552,7 +552,11 @@ export class TranscriptPresenter {
 		};
 		const block = this.#mount(factory, { before, compact: () => call.facts.presentation() !== "full" });
 		self.set(block);
-		this.#toolRuns.add(block, { names: () => [call.name], running: () => call.facts.running() });
+		this.#toolRuns.add(block, {
+			names: () => [call.name],
+			running: () => call.facts.running(),
+			failed: () => (call.facts.result()?.isError === true && !call.facts.partial() ? 1 : 0),
+		});
 		const settleIfFinal = (result: ToolCallResult, partial: boolean): void => {
 			if (partial) return;
 			if (result.isError !== true) {
@@ -677,6 +681,7 @@ export class TranscriptPresenter {
 		this.#toolRuns.add(block, {
 			names: () => group.entries().map(() => "read"),
 			running: () => group.entries().some(entry => entry.status === "pending"),
+			failed: () => group.entries().filter(entry => entry.status === "error").length,
 		});
 		const pending: PendingTool = {
 			block,
