@@ -614,6 +614,8 @@ export interface InteractiveModeContext {
 	toolOutputExpanded: boolean;
 	/** Tool activity hidden (reactive, see {@link toolOutputExpanded}). */
 	hideToolActivity: boolean;
+	/** Tool activity collapsed into one summary row per run of calls (`display.collapseToolActivity`). */
+	collapseToolActivity: boolean;
 	todoExpanded: boolean;
 	planModeEnabled: boolean;
 	vibeModeEnabled: boolean;

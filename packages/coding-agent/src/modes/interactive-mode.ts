@@ -296,6 +296,7 @@ import {
 	cfgDisplayCacheMissMarker,
 	cfgDisplayCollapseCompacted,
 	cfgDisplayHideToolActivity,
+	cfgDisplayCollapseToolActivity,
 	cfgDisplayPinnedAgents,
 	cfgDisplayShellVisualization,
 	cfgDisplayShowTokenUsage,
@@ -479,6 +480,7 @@ const cfgLiveUiSettings = combine({
 	"compaction.enabled": cfgCompactionEnabled,
 	"compaction.methodOrder": cfgCompactionMethodOrder,
 	"display.hideToolActivity": cfgDisplayHideToolActivity,
+	"display.collapseToolActivity": cfgDisplayCollapseToolActivity,
 	"display.shellVisualization": cfgDisplayShellVisualization,
 	"terminal.showImages": cfgTerminalShowImages,
 	"terminal.programStatus": cfgTerminalProgramStatus,
@@ -685,10 +687,13 @@ export class InteractiveMode implements InteractiveModeContext {
 	readonly #messageEnv: MessageFaceEnv;
 	/** The status row's working row. */
 	readonly #working: WorkingRows;
+	/** `display.collapseToolActivity` (the display flags carry it). */
+	readonly #collapseToolActivity = signal(false);
 	/** The view's display flags as signals the blocks read (the fields below write them). */
 	readonly #display: DisplayFlags = {
 		toolOutputExpanded: signal(false),
 		hideToolActivity: signal(false),
+		collapseToolActivity: this.#collapseToolActivity,
 		hideThinking: signal(false),
 		proseOnlyThinking: signal(true),
 		expandThinkingBlocks: signal(false),
@@ -716,6 +721,12 @@ export class InteractiveMode implements InteractiveModeContext {
 	}
 	set hideToolActivity(hidden: boolean) {
 		this.#display.hideToolActivity.set(hidden);
+	}
+	get collapseToolActivity(): boolean {
+		return this.#collapseToolActivity();
+	}
+	set collapseToolActivity(collapsed: boolean) {
+		this.#collapseToolActivity.set(collapsed);
 	}
 	todoExpanded = false;
 	planModeEnabled = false;
@@ -1597,6 +1608,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.hud.queue.onEdit = () => this.handleDequeue();
 
 		this.#display.hideToolActivity.set(cfgDisplayHideToolActivity.get(settings));
+		this.#collapseToolActivity.set(cfgDisplayCollapseToolActivity.get(settings));
 		this.#hideThinkingBlock = cfgHideThinkingBlock.get(settings);
 		this.#display.proseOnlyThinking.set(cfgProseOnlyThinking.get(settings));
 		this.#display.expandThinkingBlocks.set(cfgExpandThinkingBlocks.get(settings));
@@ -3584,6 +3596,11 @@ export class InteractiveMode implements InteractiveModeContext {
 		if (any("display.hideToolActivity") && hideToolActivity !== this.hideToolActivity) {
 			this.hideToolActivity = hideToolActivity;
 			if (!hideToolActivity) this.toolOutputExpanded = false;
+			resetDisplay = true;
+		}
+		const collapseToolActivity = cfgDisplayCollapseToolActivity.get(this.settings);
+		if (any("display.collapseToolActivity") && collapseToolActivity !== this.collapseToolActivity) {
+			this.collapseToolActivity = collapseToolActivity;
 			resetDisplay = true;
 		}
 		if (any("terminal.showImages", "display.shellVisualization")) this.#syncTranscriptDisplaySettings();

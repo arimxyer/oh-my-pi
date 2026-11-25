@@ -790,6 +790,19 @@ export const cfgDisplayHideToolActivity = register({
 	},
 });
 
+export const cfgDisplayCollapseToolActivity = register({
+	id: "display.collapseToolActivity",
+	type: "boolean",
+	default: false,
+	ui: {
+		tab: "appearance",
+		group: "Display",
+		label: "Collapse Tool Activity",
+		description:
+			"Draw each run of tool calls as one summary row (▸ 5 tool calls · bash ×3, edit ×2); click it to show the calls. Ctrl+Shift+O cycles shown, collapsed and hidden",
+	},
+});
+
 export const cfgDisplayShowTokenUsage = register({
 	id: "display.showTokenUsage",
 	type: "boolean",

@@ -17,7 +17,7 @@
  *   folds or unfolds that block alone (`toggle`), where ctrl+o flips every block.
  */
 import type { UiNode } from "@oh-my-pi/pi-tui";
-import { type Block, defineRolePainter, EMPTY_BLOCK, type PaintContext } from "@oh-my-pi/pi-tui/term/paint";
+import { type Block, defineRolePainter, EMPTY_BLOCK, type Hit, type PaintContext } from "@oh-my-pi/pi-tui/term/paint";
 import { defineRoleWidget } from "@oh-my-pi/pi-tui/term/widgets";
 import { styledText } from "@oh-my-pi/pi-tui/term/painters/layout";
 import { truncate } from "@oh-my-pi/pi-tui/text/width";
@@ -229,3 +229,32 @@ defineRoleWidget(
 	},
 	{ prefix: true },
 );
+
+/**
+ * A tool block's slot (`col` role `omp.tool.slot`): the summary row of the collapsed run it heads
+ * (`modes/interactive/tool-runs.tsx`), if any, then the block itself, which keeps any fixed height left.
+ */
+function paintSlot(node: UiNode, cx: PaintContext): Block {
+	const children = node.children();
+	const last = children.at(-1);
+	if (!last) return EMPTY_BLOCK;
+	if (children.length === 1) return cx.paint(last, cx.width, cx.height);
+	const rows: string[] = [];
+	const hits: Hit[] = [];
+	for (const child of children.slice(0, -1)) {
+		const head = cx.paint(child, cx.width);
+		for (const hit of head.hits ?? []) hits.push({ ...hit, row: hit.row + rows.length });
+		rows.push(...head.rows);
+	}
+	const top = rows.length;
+	const body = cx.paint(last, cx.width, cx.height === undefined ? undefined : Math.max(0, cx.height - top));
+	for (const hit of body.hits ?? []) hits.push({ ...hit, row: hit.row + top });
+	rows.push(...body.rows);
+	return {
+		rows: cx.height === undefined ? rows : rows.slice(0, cx.height),
+		...(hits.length > 0 ? { hits } : {}),
+		...(body.cursor ? { cursor: { row: body.cursor.row + top, col: body.cursor.col } } : {}),
+	};
+}
+
+defineRolePainter("col", "omp.tool.slot", paintSlot);

@@ -1420,7 +1420,12 @@ describe("InputController global editor actions", () => {
 		expect(context.ctx.showHistorySearch).toHaveBeenCalledTimes(1);
 		expect(context.press("ctrl+g")).toBe("global");
 		expect(openExternalEditor).toHaveBeenCalledTimes(1);
+		// Tool activity cycles shown → collapsed → hidden.
 		expect(context.press("ctrl+shift+o")).toBe("global");
+		expect(context.ctx.collapseToolActivity).toBe(true);
+		expect(context.ctx.hideToolActivity).toBe(false);
+		expect(context.press("ctrl+shift+o")).toBe("global");
+		expect(context.ctx.collapseToolActivity).toBe(false);
 		expect(context.ctx.hideToolActivity).toBe(true);
 		expect(context.press("alt+l")).toBe("global");
 		expect(context.spies.resetDisplayAfterAppearanceRefresh).toHaveBeenCalledTimes(1);

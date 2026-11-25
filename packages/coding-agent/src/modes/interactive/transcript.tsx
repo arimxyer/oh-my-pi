@@ -77,11 +77,14 @@ import type {
 	ToolCallSpec,
 	TranscriptEntry,
 } from "../types";
+import { ToolRuns } from "./tool-runs";
 
 /** The view's display flags, as signals every block reads. */
 export interface DisplayFlags {
 	readonly toolOutputExpanded: Signal<boolean>;
 	readonly hideToolActivity: Signal<boolean>;
+	/** `display.collapseToolActivity`: each run of tool blocks draws as one summary row (see `tool-runs.tsx`). */
+	readonly collapseToolActivity?: Signal<boolean>;
 	/** Thinking hidden (the effective state: the setting, or thinking off with nothing to reveal). */
 	readonly hideThinking: Signal<boolean>;
 	readonly proseOnlyThinking: Signal<boolean>;
@@ -155,11 +158,22 @@ export class TranscriptPresenter {
 	#pendingRuns: PendingRun[] = [];
 	/** The last prompt drawn with no reply after it yet: the next reply's opening emoji reacts on it. */
 	#reactionTarget: Signal<string | undefined> | undefined;
-	/** The newest tool card still in the transcript (`app.tools.toggleLatest` folds it). */
-	#newestTool: ToolCall | undefined;
+	/** The newest tool card still in the transcript and its block (`app.tools.toggleLatest` folds it). */
+	#newestTool: { readonly call: ToolCall; readonly block: Accessor<TranscriptBlock | undefined> } | undefined;
+	readonly #toolRuns: ToolRuns;
 
 	constructor(host: PresenterHost) {
 		this.#host = host;
+		this.#toolRuns = new ToolRuns({
+			blocks: () => host.shell.transcript.blocks(),
+			entryOf: block => this.transcriptEntry(block),
+			// Hidden activity draws nothing, summary rows included.
+			collapse: () => (host.display.collapseToolActivity?.() ?? false) && !host.display.hideToolActivity(),
+			expandAll: () => host.display.toolOutputExpanded(),
+			redraw: blocks => {
+				if (blocks.some(block => untrack(() => host.shell.transcript.retired(block)))) this.#oweReplay();
+			},
+		});
 	}
 
 	/** Install the extension transcript presenters; true when the set changed. */
@@ -430,11 +444,19 @@ export class TranscriptPresenter {
 		return pending;
 	}
 
-	/** Fold or unfold the newest tool card alone (as a click on its header does); false when there is none. */
+	/**
+	 * Fold or unfold the newest tool card alone (as a click on its header does); false when there is
+	 * none. A card folded into a collapsed run opens the run and shows the card in full.
+	 */
 	toggleNewestTool(): boolean {
-		const call = this.#newestTool;
-		call?.toggleShown();
-		return call !== undefined;
+		const newest = this.#newestTool;
+		if (!newest) return false;
+		const block = untrack(newest.block);
+		if (block && untrack(() => this.#toolRuns.folded(block))) {
+			this.#toolRuns.reveal(block);
+			if (!untrack(newest.call.state).expanded) newest.call.toggleShown();
+		} else newest.call.toggleShown();
+		return true;
 	}
 
 	#presentCard(spec: ToolCallSpec, builtIn: boolean, before: TranscriptBlock | undefined): PendingTool {
@@ -462,15 +484,17 @@ export class TranscriptPresenter {
 		const editMode = toolEditMode(spec.name, spec.tool);
 		if (editMode) call.setRenderContext({ editMode });
 		const presentedId = signal(spec.id);
+		/** The card's block, once mounted (its run is looked up by it). */
+		const self = signal<TranscriptBlock | undefined>(undefined);
 		// A card placed above others (`before`) is not the newest.
-		if (!before) this.#newestTool = call;
+		if (!before) this.#newestTool = { call, block: self };
 		const factory = () => {
 			effect(() => {
 				const value = display.toolOutputExpanded();
 				untrack(() => call.setExpanded(value));
 			});
 			effect(() => {
-				const value = !display.hideToolActivity();
+				const value = !display.hideToolActivity() && !this.#toolRuns.folded(self());
 				untrack(() => call.setActivityVisible(value));
 			});
 			effect(() => {
@@ -500,11 +524,20 @@ export class TranscriptPresenter {
 				return result && !call.facts.partial() ? this.#spotlightNotice(call.id, result) : undefined;
 			};
 			onCleanup(() => {
-				if (this.#newestTool === call) this.#newestTool = undefined;
+				if (this.#newestTool?.call === call) this.#newestTool = undefined;
 			});
-			return [<ToolBlock call={call} />, notice];
+			// A block paints its first node only: the run's summary row and the card share one slot.
+			const slot = (
+				<col role="omp.tool.slot">
+					{() => this.#toolRuns.summary(self())}
+					<ToolBlock call={call} />
+				</col>
+			);
+			return [slot, notice];
 		};
 		const block = this.#mount(factory, { before, compact: () => call.facts.presentation() !== "full" });
+		self.set(block);
+		this.#toolRuns.add(block, { names: () => [call.name], running: () => call.facts.running() });
 		const settleIfFinal = (result: ToolCallResult, partial: boolean): void => {
 			if (partial) return;
 			if (result.isError !== true) {
@@ -598,13 +631,14 @@ export class TranscriptPresenter {
 				this.#oweReplay();
 			return toolPresentation(answer);
 		});
+		const self = signal<TranscriptBlock | undefined>(undefined);
 		const factory = () => {
 			effect(() => {
 				const value = display.toolOutputExpanded();
 				untrack(() => group.setExpanded(value));
 			});
 			effect(() => {
-				const value = !display.hideToolActivity();
+				const value = !display.hideToolActivity() && !this.#toolRuns.folded(self());
 				untrack(() => group.setActivityVisible(value));
 			});
 			effect(() => {
@@ -614,9 +648,20 @@ export class TranscriptPresenter {
 			});
 			const notices = (): JSXNode[] =>
 				[...finals().entries()].map(([id, result]) => this.#spotlightNotice(id, result));
-			return [ReadGroupBlock({ group }), notices];
+			const slot = (
+				<col role="omp.tool.slot">
+					{() => this.#toolRuns.summary(self())}
+					{ReadGroupBlock({ group })}
+				</col>
+			);
+			return [slot, notices];
 		};
 		const block = this.#mount(factory, { before: options?.before, compact: group.compact });
+		self.set(block);
+		this.#toolRuns.add(block, {
+			names: () => group.entries().map(() => "read"),
+			running: () => group.entries().some(entry => entry.status === "pending"),
+		});
 		const pending: PendingTool = {
 			block,
 			group,

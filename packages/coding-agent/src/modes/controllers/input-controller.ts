@@ -68,6 +68,7 @@ import {
 	cfgBareExitOnEmptySession,
 	cfgBareSlashCommands,
 	cfgDisplayHideToolActivity,
+	cfgDisplayCollapseToolActivity,
 	cfgDoubleEscapeAction,
 	cfgEmojiAutocomplete,
 	cfgImagesAutoResize,
@@ -3212,14 +3213,18 @@ export class InputController {
 		this.ctx.showStatus(`Tool output expansion: ${this.ctx.toolOutputExpanded ? "enabled" : "disabled"}`);
 	}
 
+	/** Ctrl+Shift+O: tool activity shown → collapsed into summary rows → hidden → shown. */
 	toggleToolActivityVisibility(): void {
-		this.ctx.hideToolActivity = !this.ctx.hideToolActivity;
+		const next = this.ctx.hideToolActivity ? "shown" : this.ctx.collapseToolActivity ? "hidden" : "collapsed";
+		this.ctx.hideToolActivity = next === "hidden";
+		this.ctx.collapseToolActivity = next === "collapsed";
 		cfgDisplayHideToolActivity.set(this.ctx.settings, this.ctx.hideToolActivity);
+		cfgDisplayCollapseToolActivity.set(this.ctx.settings, this.ctx.collapseToolActivity);
 		if (!this.ctx.hideToolActivity) this.ctx.toolOutputExpanded = false;
-		// Live blocks follow the flag; tool rows already retired to terminal history change only
+		// Live blocks follow the flags; tool rows already retired to terminal history change only
 		// when the scrollback is rebuilt.
 		this.ctx.shell.host?.replayHistory();
-		this.ctx.showStatus(`Tool activity: ${this.ctx.hideToolActivity ? "hidden" : "visible"}`);
+		this.ctx.showStatus(`Tool activity: ${next}`);
 	}
 
 	setToolsExpanded(expanded: boolean): void {

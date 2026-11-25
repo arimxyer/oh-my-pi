@@ -312,6 +312,7 @@ export function createInteractiveModeContext(overrides: ContextOverrides = {}): 
 		presentToolCall: vi.fn((...args: Parameters<TranscriptPresenter["presentToolCall"]>) =>
 			presenter().presentToolCall(...args),
 		),
+		toggleNewestToolCard: vi.fn(() => presenter().toggleNewestTool()),
 		presentReadGroup: vi.fn((...args: Parameters<TranscriptPresenter["presentReadGroup"]>) =>
 			presenter().presentReadGroup(...args),
 		),
@@ -364,6 +365,12 @@ export function createInteractiveModeContext(overrides: ContextOverrides = {}): 
 		},
 		set hideToolActivity(value: boolean) {
 			display.hideToolActivity.set(value);
+		},
+		get collapseToolActivity() {
+			return display.collapseToolActivity();
+		},
+		set collapseToolActivity(value: boolean) {
+			display.collapseToolActivity.set(value);
 		},
 		get hideThinkingBlock() {
 			return display.hideThinkingBlock();
@@ -471,6 +478,7 @@ export function createInteractiveModeContext(overrides: ContextOverrides = {}): 
 			display: {
 				toolOutputExpanded: display.toolOutputExpanded,
 				hideToolActivity: display.hideToolActivity,
+				collapseToolActivity: display.collapseToolActivity,
 				hideThinking: display.hideThinkingBlock,
 				proseOnlyThinking: display.proseOnlyThinking,
 				expandThinkingBlocks: display.expandThinkingBlocks,
@@ -510,6 +518,7 @@ export interface ContextDisplay {
 	readonly toolOutputExpanded: Signal<boolean>;
 	readonly hideToolActivity: Signal<boolean>;
 	readonly hideThinkingBlock: Signal<boolean>;
+	readonly collapseToolActivity: Signal<boolean>;
 	readonly proseOnlyThinking: Signal<boolean>;
 	readonly expandThinkingBlocks: Signal<boolean>;
 }
@@ -520,6 +529,7 @@ function createDisplay(): ContextDisplay {
 	return {
 		toolOutputExpanded: signal(false),
 		hideToolActivity: signal(false),
+		collapseToolActivity: signal(false),
 		hideThinkingBlock: signal(false),
 		proseOnlyThinking: signal(true),
 		expandThinkingBlocks: signal(false),
