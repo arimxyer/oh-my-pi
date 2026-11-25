@@ -693,7 +693,8 @@ export class TranscriptPresenter {
 			running: () => group.entries().some(entry => entry.status === "pending"),
 			failed: () => group.entries().filter(entry => entry.status === "error").length,
 			latest: () => {
-				const path = group.entries().at(-1)?.path;
+				const entries = group.entries();
+				const path = (entries.findLast(entry => entry.status === "pending") ?? entries.at(-1))?.path;
 				return path ? `Read ${shortenPath(path)}` : undefined;
 			},
 		});

@@ -205,13 +205,17 @@ export class ToolRuns {
 		let running = false;
 		let failed = 0;
 		let latest: string | undefined;
+		let latestRunning: string | undefined;
 		for (const member of run) {
 			const info = members.get(member);
 			if (!info) continue;
 			for (const name of info.names()) counts.set(name, (counts.get(name) ?? 0) + 1);
-			if (info.running()) running = true;
+			const live = info.running();
+			if (live) running = true;
 			failed += info.failed();
-			latest = info.latest() ?? latest;
+			const title = info.latest();
+			latest = title ?? latest;
+			if (live) latestRunning = title ?? latestRunning;
 		}
 		let calls = 0;
 		for (const count of counts.values()) calls += count;
@@ -219,7 +223,8 @@ export class ToolRuns {
 		const shown = this.#open(block);
 		const label = `${shown ? "▾" : "▸"} ${calls} tool call${calls === 1 ? "" : "s"}`;
 		const names = [...counts].map(([name, count]) => (count === 1 ? name : `${name} ×${count}`)).join(", ");
-		const detail = [names, failed > 0 ? `${failed} failed` : undefined, latest].filter(Boolean).join(" · ");
+		const newest = latestRunning ?? latest;
+		const detail = [names, failed > 0 ? `${failed} failed` : undefined, newest].filter(Boolean).join(" · ");
 		return (
 			<tool
 				key="tool-run"

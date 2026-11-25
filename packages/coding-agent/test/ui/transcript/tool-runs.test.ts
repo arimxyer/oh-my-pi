@@ -100,6 +100,25 @@ describe("collapsed tool activity", () => {
 		expect(row).not.toContain("echo first");
 	});
 
+	it("names the call still running over a newer one that already finished", () => {
+		const ctx = createInteractiveModeContext();
+		contextDisplay(ctx).collapseToolActivity.set(true);
+		const slow = ctx.presentToolCall({
+			id: "slow",
+			name: "bash",
+			args: { command: "echo slow" },
+			tool: undefined,
+			cwd: "/",
+		});
+		slow.setArgsComplete("slow");
+		slow.setExecutionStarted("slow");
+		bash(ctx, "fast", "ok");
+
+		const [row] = renderTranscript(ctx, 160).filter(line => line.includes("tool call"));
+		expect(row).toContain("echo slow");
+		expect(row).not.toContain("echo fast");
+	});
+
 	it("opens every run while ctrl+o expands all, and a click still folds one", () => {
 		const ctx = createInteractiveModeContext();
 		const display = contextDisplay(ctx);
