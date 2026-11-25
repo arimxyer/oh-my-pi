@@ -53,6 +53,11 @@ export function noteSource(note: AdvisorNote): string | undefined {
 	return note.advisor && note.advisor !== "default" ? note.advisor : undefined;
 }
 
+/** Who wrote a note, for display: its advisor's name and model (`security · gpt-6.1-sol`). */
+export function noteAuthor(note: AdvisorNote): string | undefined {
+	return [noteSource(note), note.model].filter(Boolean).join(" · ") || undefined;
+}
+
 /** One note's rank (`Concern`), else a tally worst first (`1 blocker · 2 concerns`). */
 function tally(notes: readonly AdvisorNote[]): TspSpan[] {
 	if (notes.length === 1) {
@@ -84,12 +89,12 @@ export function AdvisorMessage(props: {
 	const notes = props.details?.notes ?? [];
 	const { expanded, toggle } = cardExpansion(props.expanded, props.onToggle);
 	const look = RANK_LOOK[RANKS.find(rank => notes.some(note => rankOf(note) === rank)) ?? "note"];
-	const sources = new Set(notes.map(noteSource));
+	const sources = new Set(notes.map(noteAuthor));
 	const [sole] = sources;
 	const attribute = sources.size > 1;
 	const collapsible = notes.length > COLLAPSED_ADVISOR_NOTES;
 	const spansOf = (note: AdvisorNote): TspSpan[] => {
-		const who = attribute ? noteSource(note) : undefined;
+		const who = attribute ? noteAuthor(note) : undefined;
 		const body = { t: stripEscapes(note.note).replaceAll("\t", "   ") };
 		return who ? [{ t: `${who} · `, s: "dim" }, body] : [body];
 	};
@@ -106,7 +111,10 @@ export function AdvisorMessage(props: {
 			<row key="head" gap="sm" align="center" role="omp.advisor.head">
 				<icon name={look.icon} tone={look.tone} />
 				<text spans={tally(notes)} grow={1} />
-				<text role="omp.advisor.source" spans={[{ t: sources.size === 1 && sole ? sole : "Advisor", s: "dim" }]} />
+				<text
+					role="omp.advisor.source"
+					spans={[{ t: sources.size === 1 && sole ? `Advisor · ${sole}` : "Advisor", s: "dim" }]}
+				/>
 			</row>
 			{notes.map((note, index) => {
 				if (notes.length === 1) {

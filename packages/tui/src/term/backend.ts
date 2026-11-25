@@ -66,6 +66,12 @@ const SMOOTH_TICK_MS = 1000 / 20;
 /** Rows one wheel tick scrolls the fullscreen transcript. */
 const WHEEL_ROWS = 3;
 
+/** Screen cells a frame's layer nodes cover: their rectangles, or every cell under a modal. */
+interface LayerCover {
+	modal: boolean;
+	readonly rects: { readonly top: number; readonly left: number; readonly rows: number; readonly cols: number }[];
+}
+
 /** Options of a {@link TermBackend}. */
 export interface TermBackendOptions {
 	readonly surface: Surface;
@@ -370,6 +376,10 @@ export class TermBackend {
 	#running = false;
 	/** The fullscreen transcript's top row while scrolled away from the tail; null follows the tail. */
 	#anchor: TranscriptAnchor | null = null;
+	/** The fullscreen window row drawing the "more below · jump to end" hint, while one does. */
+	#jumpRow: number | undefined;
+	/** Screen cells the last frame's layer nodes cover; a modal one owns every cell. */
+	#layerCover: LayerCover = { modal: false, rects: [] };
 	/** The fullscreen transcript's mouse selection; `pointer` (a window cell) while the button is held. */
 	#selection: { anchor: TranscriptPoint; focus: TranscriptPoint; pointer?: { row: number; col: number } } | undefined;
 	/** The transcript row each row of the last fullscreen window showed. */
@@ -715,10 +725,16 @@ export class TermBackend {
 		// The shutdown flush writes the transcript inline: transient layers are no part of it.
 		const layer = flush ? [] : this.#surface.layer();
 		this.#hitLayer = layer;
+		this.#jumpRow = undefined;
+		const cover: LayerCover = { modal: false, rects: [] };
+		this.#layerCover = cover;
 		/** Draw a layer node over `rows` (centered, or at its `top`/`bottom` anchor). */
 		const place = (rows: string[], node: UiNode): void => {
 			// Modal sheets own the pointer everywhere, including their margins and non-interactive rows.
-			if (node.kind === "overlay" && (node.props() as { modal?: boolean }).modal) hits.length = 0;
+			if (node.kind === "overlay" && (node.props() as { modal?: boolean }).modal) {
+				hits.length = 0;
+				cover.modal = true;
+			}
 			const overlayCols = node.kind === "overlay" ? overlayWidth(node, width) : width;
 			const block = this.#paint(node, overlayCols);
 			const anchor = layerAnchor(node);
@@ -733,6 +749,7 @@ export class TermBackend {
 			composite(rows, block, top, left, width);
 			if (block.cursor) cursor = { row: top + block.cursor.row, col: left + block.cursor.col };
 			for (const hit of block.hits ?? []) hits.push({ hit, top, left });
+			cover.rects.push({ top, left, rows: block.rows.length, cols: overlayCols });
 		};
 		const fullscreenAt = layer.findLastIndex(isFullscreen);
 		if (fullscreenAt !== -1) {
@@ -800,9 +817,12 @@ export class TermBackend {
 			}
 			while (rows.length < capacity) rows.push("");
 			if (view.anchor && capacity > 1) {
+				// The last window row marks content below; a click on it jumps to the end (and follows it).
+				const theme = this.#options.theme();
 				const key = widgetKeys("transcript.bottom")[0];
-				const hint = key ? `↓ more below · ${key} to follow` : "↓ more below";
-				rows[capacity - 1] = truncate(this.#options.theme().fg("dim", hint), width, "");
+				const hint = `${theme.fg("dim", "↓ more below · ")}${theme.fg("accent", "jump to end")}${key ? theme.fg("dim", ` (${key})`) : ""}`;
+				rows[capacity - 1] = truncate(hint, width, "");
+				this.#jumpRow = capacity - 1;
 			}
 			const dockTop = rows.length;
 			for (const placed of dock) {
@@ -1265,7 +1285,14 @@ export class TermBackend {
 			if (text.trim()) this.#options.onCopy?.(text);
 			return;
 		}
-		if (mouse.action === "press" && mouse.button === "left") this.#selection = undefined;
+		if (mouse.action === "press" && mouse.button === "left") {
+			this.#selection = undefined;
+			// The "jump to end" hint row: back to the tail, following it again.
+			if (windowRow === this.#jumpRow && !this.#layerCovers(viewportRow, mouse.col)) {
+				this.#anchor = null;
+				return;
+			}
+		}
 		for (let i = this.#hits.length - 1; i >= 0; i--) {
 			const { hit, top, left } = this.#hits[i]!;
 			const row = viewportRow - top - hit.row;
@@ -1296,6 +1323,13 @@ export class TermBackend {
 		if (overWindow && (mouse.button === "wheel-up" || mouse.button === "wheel-down")) {
 			this.#scrollTranscript(mouse.button === "wheel-up" ? -WHEEL_ROWS : WHEEL_ROWS);
 		}
+	}
+
+	/** Whether a layer node of the last frame covers screen cell `row`,`col` (a modal covers all). */
+	#layerCovers(row: number, col: number): boolean {
+		const { modal, rects } = this.#layerCover;
+		if (modal) return true;
+		return rects.some(r => row >= r.top && row < r.top + r.rows && col >= r.left && col < r.left + r.cols);
 	}
 
 	/** Point the hover state at the topmost hit under the pointer (painters band it via `cx.hovered`). */

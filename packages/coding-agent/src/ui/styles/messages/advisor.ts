@@ -1,7 +1,8 @@
 /**
  * Advisor notes (`card` role `omp.advisor`), one cell in:
  *
- * - `ⓘ Advisor` (bold, `customMessageLabel`) and a dim `N notes · K blockers`.
+ * - `ⓘ Advisor` (bold, `customMessageLabel`) and a dim `name · model · N notes · K blockers`
+ *   when every note has one author; otherwise each note names its own.
  * - Each note on a rail tinted by its severity (`error` blocker, `warning`
  *   concern, `muted` otherwise): `⟦severity⟧`, `T-n` and `[advisor]` lead its
  *   first row; paragraphs wrap at most 110 cells wide.
@@ -13,7 +14,7 @@ import { type Block, defineRolePainter, type PaintContext } from "@oh-my-pi/pi-t
 import { replaceTabs, truncate, visibleWidth, wrap } from "@oh-my-pi/pi-tui/text/width";
 import type { Theme } from "@oh-my-pi/pi-tui/theme/contract";
 import type { AdvisorNote } from "../../../session/transcript/messages";
-import { COLLAPSED_ADVISOR_NOTES, noteSource } from "../../transcript/messages/advisor-message";
+import { COLLAPSED_ADVISOR_NOTES, noteAuthor } from "../../transcript/messages/advisor-message";
 import { termOf } from "./fill";
 
 /** Widest a note's text runs. */
@@ -33,14 +34,13 @@ function wrapVarying(text: string, first: number, rest: number): string[] {
 	return [line, ...wrap(text.slice(at + line.length).trimStart(), rest)];
 }
 
-function noteRows(theme: Theme, note: AdvisorNote, width: number): string[] {
+function noteRows(theme: Theme, note: AdvisorNote, width: number, author: string | undefined): string[] {
 	const symbols = theme.symbols;
 	const color = severityColor(note.severity);
 	const badge = note.severity
 		? `${theme.fg(color, `${symbols.symbol("format.bracketLeft")}${note.severity}${symbols.symbol("format.bracketRight")}`)} `
 		: "";
-	const source = noteSource(note);
-	const who = source ? `${theme.fg("dim", `[${replaceTabs(source)}]`)} ` : "";
+	const who = author ? `${theme.fg("dim", `[${replaceTabs(author)}]`)} ` : "";
 	const age = note.turnsAgo !== undefined ? `${theme.fg("dim", `T-${note.turnsAgo}`)} ` : "";
 	const railGlyph = symbols.symbol("advisor.rail");
 	const rail = theme.fg(color, railGlyph);
@@ -67,13 +67,18 @@ function paintAdvisor(node: UiNode, cx: PaintContext): Block {
 	const notes = term.notes ?? [];
 	const inner = Math.max(1, cx.width - 2);
 	const blockers = notes.filter(note => note.severity === "blocker").length;
+	const authors = new Set(notes.map(noteAuthor));
+	const [sole] = authors;
 	const meta = [`${notes.length} ${notes.length === 1 ? "note" : "notes"}`];
+	if (authors.size === 1 && sole) meta.unshift(replaceTabs(sole));
 	if (blockers > 0) meta.push(theme.fg("error", `${blockers} blocker${blockers === 1 ? "" : "s"}`));
 	const tag = theme.fg("customMessageLabel", `\x1b[1m${theme.symbols.symbol("status.info")} Advisor\x1b[22m`);
 	const rows = [truncate(`${tag} ${theme.fg("dim", meta.join(" · "))}`, inner)];
 	const shown = term.expanded ? notes : notes.slice(0, COLLAPSED_ADVISOR_NOTES);
 	const body: string[] = [];
-	for (const note of shown) body.push(...noteRows(theme, note, inner));
+	for (const note of shown) {
+		body.push(...noteRows(theme, note, inner, authors.size > 1 ? noteAuthor(note) : undefined));
+	}
 	const hidden = notes.length - shown.length;
 	if (hidden > 0) {
 		const rail = theme.fg("dim", theme.symbols.symbol("advisor.rail"));

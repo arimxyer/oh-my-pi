@@ -1848,6 +1848,7 @@ export class SessionAdvisors {
 		// The implicit single ("default") advisor stamps no source name, so its
 		// agent-facing `<advisory>` bytes stay identical to the pre-multi-advisor path.
 		const source = advisor.slug ? advisor.name : undefined;
+		const model = advisor.agent.state.model?.id;
 		// Inside a terminal-boundary callback (deferred flush + catch-up wait) the
 		// loop still reports streaming, so a delivered note would steer a fresh turn
 		// — waking the primary to act on advice produced against work that already
@@ -1862,11 +1863,12 @@ export class SessionAdvisors {
 				note,
 				severity,
 				advisor: source,
+				model,
 				turn: turn ?? this.#advisorPrimaryTurnsCompleted,
 			});
 			return;
 		}
-		const notes: AdvisorNote[] = [{ note, severity, advisor: source }];
+		const notes: AdvisorNote[] = [{ note, severity, advisor: source, model }];
 		const terminalAnswerNoQueuedWork = this.#hasTerminalTextAnswerWithoutQueuedWork();
 		// A note that lands after the boundary window closed (catch-up off, or a
 		// review slower than its wait) gets exactly what the merged boundary flush
@@ -1895,7 +1897,7 @@ export class SessionAdvisors {
 			interruptImmuneTurnActive: this.#isAdvisorInterruptImmuneTurnActive(),
 		});
 		if (channel === "aside") {
-			this.#host.yieldQueue.enqueue("advisor", { note, severity, advisor: source });
+			this.#host.yieldQueue.enqueue("advisor", { note, severity, advisor: source, model });
 			return;
 		}
 		this.#deliverAdvisorBatch(notes, formatAdvisorBatchContent(notes), channel === "steer", advisor);

@@ -324,6 +324,8 @@ export interface AdvisorNote {
 	severity?: AdvisorSeverity;
 	/** Which configured advisor produced this note (omitted for the default advisor). */
 	advisor?: string;
+	/** The advisor's model id when it wrote the note; display only, never in the agent-facing `<advisory>`. */
+	model?: string;
 	/** Primary turns completed when note was emitted. */
 	turn?: number;
 	/** Primary turns elapsed before merged-batch delivery. */

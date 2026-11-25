@@ -637,10 +637,14 @@ describe("TermBackend main surface", () => {
 });
 
 describe("TermBackend fullscreen transcript", () => {
-	function fullscreenSetup(main: () => unknown) {
+	function fullscreenSetup(main: () => unknown, layer?: () => unknown) {
 		const driver = new FakeDriver();
 		const copied: string[] = [];
-		const surface = createSurface(() => ({ main: main() as never, dock: <rows key="dock" lines={["dock"]} /> }));
+		const surface = createSurface(() => ({
+			main: main() as never,
+			dock: <rows key="dock" lines={["dock"]} />,
+			...(layer ? { layer: layer as never } : {}),
+		}));
 		const backend = new TermBackend({
 			surface,
 			driver,
@@ -712,6 +716,38 @@ describe("TermBackend fullscreen transcript", () => {
 		// Nothing to scroll: Page Up leaves it following.
 		press("pageUp");
 		expect(screen()).toEqual(["a0", "a1", "", "", "", "dock"]);
+	});
+
+	it("jumps to the end and follows it again on a click on the more-below row", () => {
+		const b = signal(lines("b", 4));
+		const { backend, screen, press, mouse } = fullscreenSetup(() => [
+			<rows key="a" lines={lines("a", 6)} />,
+			<rows key="b" lines={b} />,
+		]);
+		press("pageUp");
+		expect(screen()[4]).toStartWith("↓ more below");
+		mouse(4, 2, "left", "press");
+		expect(screen()).toEqual(["a5", "b0", "b1", "b2", "b3", "dock"]);
+		b.set(lines("b", 5));
+		backend.renderNow();
+		expect(screen()).toEqual(["b0", "b1", "b2", "b3", "b4", "dock"]);
+	});
+
+	it("leaves the view where it is on a click on a layer drawn over the more-below row", () => {
+		const sheet = signal(true);
+		const { backend, screen, press, mouse } = fullscreenSetup(
+			() => [<rows key="a" lines={lines("a", 6)} />, <rows key="b" lines={lines("b", 4)} />],
+			() => (sheet() ? <rows key="sheet" term={{ anchor: "bottom" }} lines={["sheet", "sheet"]} /> : null),
+		);
+		press("pageUp");
+		expect(screen()[4]).toStartWith("sheet");
+		mouse(4, 2, "left", "press");
+		expect(screen().slice(0, 4)).toEqual(["a2", "a3", "a4", "a5"]);
+
+		sheet.set(false);
+		backend.renderNow();
+		mouse(4, 2, "left", "press");
+		expect(screen()).toEqual(["a5", "b0", "b1", "b2", "b3", "dock"]);
 	});
 
 	it("selects by dragging, draws the selection, and copies it on release; a click copies nothing", () => {
