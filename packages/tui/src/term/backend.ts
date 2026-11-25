@@ -768,13 +768,17 @@ export class TermBackend {
 			this.#windowRows = capacity;
 			const rows = view.rows;
 			const map = windowRowMap(source, view.blocks, capacity);
-			this.#windowMap = map;
+			const sticky = this.#stickyAt(map, source);
+			// The pinned row covers the transcript row under it: selections never end there.
+			const selectable = sticky ? [null, ...map.slice(1)] : map;
+			this.#windowMap = selectable;
 			const selection = this.#selection;
 			// While the button is held the selection ends under the pointer, wherever the window scrolled.
 			if (selection?.pointer) {
-				selection.focus = pointAt(map, selection.pointer.row, selection.pointer.col) ?? selection.focus;
+				const row = Math.max(sticky ? 1 : 0, selection.pointer.row);
+				selection.focus = pointAt(selectable, row, selection.pointer.col) ?? selection.focus;
 			}
-			if (selection && !highlightSelection(rows, map, source, selection.anchor, selection.focus)) {
+			if (selection && !highlightSelection(rows, selectable, source, selection.anchor, selection.focus)) {
 				this.#selection = undefined;
 			}
 			for (const { block, top } of view.blocks) {
@@ -785,11 +789,6 @@ export class TermBackend {
 					if (top + hit.row < capacity && top + hit.row + hit.height > 0) hits.push({ hit, top, left: 0 });
 				}
 			}
-			const first = map[0];
-			const sticky =
-				first && capacity > 1
-					? this.#options.stickyHeader?.(first.node, first.offset - source.lead(first.index))
-					: undefined;
 			if (sticky) {
 				const head = this.#paint(sticky, width);
 				if (head.rows.length > 0) {
@@ -1170,6 +1169,13 @@ export class TermBackend {
 		this.#anchor = scrollTranscript(this.#transcriptRows(width), this.#anchor, this.#windowRows, delta);
 	}
 
+	/** The node `stickyHeader` pins on the window's top row for `map`, if any. */
+	#stickyAt(map: WindowRowMap, source: TranscriptRows): UiNode | undefined {
+		const first = map[0];
+		if (!first || map.length < 2) return undefined;
+		return this.#options.stickyHeader?.(first.node, first.offset - source.lead(first.index));
+	}
+
 	/** `main` as the fullscreen window reads it, painted on demand at `width`. */
 	#transcriptRows(width: number): TranscriptRows {
 		const main = this.#surface.main();
@@ -1244,9 +1250,11 @@ export class TermBackend {
 			// so the release cell is resolved against the window as it stands now.
 			const source = this.#transcriptRows(Math.max(1, this.#driver.columns));
 			const view = transcriptWindow(source, this.#anchor, this.#windowRows);
-			const row = Math.min(windowRow, this.#windowRows - 1);
-			selection.focus =
-				pointAt(windowRowMap(source, view.blocks, this.#windowRows), row, mouse.col) ?? selection.focus;
+			const map = windowRowMap(source, view.blocks, this.#windowRows);
+			// The pinned row covers the transcript row under it: a release there ends on the row below.
+			const top = this.#stickyAt(map, source) ? 1 : 0;
+			const row = Math.max(top, Math.min(windowRow, this.#windowRows - 1));
+			selection.focus = pointAt(top ? [null, ...map.slice(1)] : map, row, mouse.col) ?? selection.focus;
 			const { anchor, focus } = selection;
 			if (anchor.node === focus.node && anchor.offset === focus.offset && anchor.col === focus.col) {
 				// A click, not a drag: nothing selected.

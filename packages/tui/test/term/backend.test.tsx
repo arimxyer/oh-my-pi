@@ -788,4 +788,36 @@ describe("TermBackend fullscreen transcript", () => {
 		expect(screen().slice(0, 4)).toEqual(["HEAD", "b0", "b1", "b2"]);
 		backend.stop();
 	});
+
+	it("never ends a selection on the row the pinned header covers", () => {
+		const driver = new FakeDriver();
+		const copied: string[] = [];
+		const surface = createSurface(() => ({
+			main: [<rows key="h" lines={["HEAD"]} />, <rows key="b" lines={lines("b", 8)} />],
+			dock: <rows key="dock" lines={["dock"]} />,
+		}));
+		const [head, body] = surface.main();
+		const backend = new TermBackend({
+			surface,
+			driver,
+			theme: () => PLAIN_THEME,
+			separator: () => 0,
+			fullscreen: () => true,
+			stickyHeader: node => (node === body ? head : undefined),
+			onCopy: text => copied.push(text),
+		});
+		backend.start();
+		const mouse = (row: number, action: MouseEvent["action"]): void => {
+			driver.input!({ type: "mouse", mouse: { row, col: 0, button: "left", action, mods: [] } });
+			backend.renderNow();
+		};
+		// Window: HEAD (pinned over b3), b4–b7. Drag from b6 onto the pinned row: the window scrolls a
+		// row (HEAD over b2, then b3–b6) and the selection stops at the first row drawn under it.
+		mouse(3, "press");
+		mouse(0, "drag");
+		expect(stripEscapes(driver.frames.at(-1)!.fullscreen![0]!).trimEnd()).toBe("HEAD");
+		mouse(0, "release");
+		expect(copied).toEqual(["b3\nb4\nb5\nb"]);
+		backend.stop();
+	});
 });
