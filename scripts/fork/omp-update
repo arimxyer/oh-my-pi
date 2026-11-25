@@ -124,7 +124,7 @@ bun install
 bun run build:native
 # The patch's own tests: a rebase that compiles can still break its behavior.
 (cd packages/tui && bun test test/term/backend.test.tsx test/term/host-mouse.test.tsx)
-(cd packages/coding-agent && bun test test/ui/composer/fullscreen-paging.test.tsx test/ui/tools/tool-fold.test.tsx test/ui/transcript/tool-runs.test.ts)
+(cd packages/coding-agent && bun test test/ui/composer/fullscreen-paging.test.tsx test/ui/tools/tool-fold.test.tsx test/ui/transcript/tool-runs.test.ts test/tool-runs-retention.test.ts)
 bun --cwd=packages/coding-agent run build
 
 built="$repo/packages/coding-agent/dist/omp"
