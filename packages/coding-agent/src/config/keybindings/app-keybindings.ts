@@ -19,6 +19,7 @@ interface AppKeybindings {
 	"app.model.selectTemporary": true;
 	"app.tools.expand": true;
 	"app.tools.toggleLatest": true;
+	"app.tools.foldRuns": true;
 	"app.tools.toggleVisibility": true;
 	"app.ask.hide": true;
 	"app.ask.note": true;
@@ -124,6 +125,10 @@ export const KEYBINDINGS = {
 	"app.tools.toggleLatest": {
 		defaultKeys: "alt+e",
 		description: "Fold or unfold the newest tool card",
+	},
+	"app.tools.foldRuns": {
+		defaultKeys: "alt+shift+e",
+		description: "Fold every open group of tool calls (collapsed tool activity)",
 	},
 	"app.tools.toggleVisibility": {
 		defaultKeys: "ctrl+shift+o",

@@ -11,7 +11,7 @@
  * thinking or tool calls sits inside it.
  */
 import type { AssistantMessage } from "@oh-my-pi/pi-ai";
-import { type Accessor, computed, type JSXNode, type Signal, signal, untrack } from "@oh-my-pi/pi-tui";
+import { type Accessor, computed, type JSXNode, type Signal, signal, type UiNode, untrack } from "@oh-my-pi/pi-tui";
 import type { TranscriptBlock } from "../../ui/shell";
 import type { TranscriptEntry } from "../types";
 
@@ -39,6 +39,16 @@ function showsText(message: AssistantMessage | undefined): boolean {
 	return message?.content.some(part => part.type === "text" && part.text.trim() !== "") === true;
 }
 
+/** The summary row node inside a run's first block (`role: "omp.tool.run"`), when it draws one. */
+function summaryNode(node: UiNode): UiNode | undefined {
+	if ((node.props() as { role?: string }).role === "omp.tool.run") return node;
+	for (const child of node.children()) {
+		const found = summaryNode(child);
+		if (found) return found;
+	}
+	return undefined;
+}
+
 /** See the module docs. */
 export class ToolRuns {
 	readonly #host: ToolRunsHost;
@@ -48,8 +58,12 @@ export class ToolRuns {
 		TranscriptBlock,
 		Signal<{ readonly open: boolean; readonly epoch: number } | undefined>
 	>();
-	/** Bumped whenever expand-all flips: it resets every choice made by hand, as ctrl+o resets card folds. */
+	/** Bumped whenever expand-all flips or every run is folded: it resets every choice made by hand. */
 	readonly #epoch: Accessor<number>;
+	/** Folds of every run at once (the fold-all key). */
+	readonly #resets = signal(0);
+	/** The epoch in which every run was folded: until the next one, runs stay folded unless opened by hand. */
+	readonly #foldedAll = signal<number | undefined>(undefined);
 	/**
 	 * Each tool block's run (its blocks in order). Weak: the last computed value lingers until the
 	 * next read, and blocks the transcript dropped must not live on in it.
@@ -64,7 +78,7 @@ export class ToolRuns {
 			const expandAll = host.expandAll();
 			if (last !== undefined && expandAll !== last) epoch++;
 			last = expandAll;
-			return epoch;
+			return epoch + this.#resets();
 		});
 		this.#runs = computed(() => {
 			const members = this.#members();
@@ -114,8 +128,10 @@ export class ToolRuns {
 
 	/** Whether the run starting at `first` shows its blocks (reactive). */
 	#open(first: TranscriptBlock): boolean {
+		const epoch = this.#epoch();
 		const choice = this.#choiceOf(first)();
-		return choice !== undefined && choice.epoch === this.#epoch() ? choice.open : this.#host.expandAll();
+		if (choice !== undefined && choice.epoch === epoch) return choice.open;
+		return this.#foldedAll() === epoch ? false : this.#host.expandAll();
 	}
 
 	#setOpen(run: readonly TranscriptBlock[], open: boolean): void {
@@ -141,6 +157,27 @@ export class ToolRuns {
 		const open = !untrack(() => this.#open(run[0]!));
 		this.#setOpen(run, open);
 		return open ? "opened" : "folded";
+	}
+
+	/** Fold every run (the fold-all key); false when tool activity is not collapsed. */
+	foldAll(): boolean {
+		if (!untrack(this.#host.collapse)) return false;
+		this.#resets.set(untrack(this.#resets) + 1);
+		this.#foldedAll.set(untrack(this.#epoch));
+		this.#host.redraw([...untrack(this.#members).keys()]);
+		return true;
+	}
+
+	/**
+	 * The summary row to pin on the fullscreen window's top row while `block` (at row `row` of it)
+	 * is the first one shown: its run's, when the run is open and its own row scrolled away.
+	 */
+	stickyHead(block: TranscriptBlock, row: number): UiNode | undefined {
+		if (!this.#host.collapse()) return undefined;
+		const run = this.#runs().get(block);
+		const first = run?.[0];
+		if (!first || (block === first && row <= 0) || !this.#open(first)) return undefined;
+		return summaryNode(first.node);
 	}
 
 	/** The summary row `block` draws: its run's, when collapsing and `block` starts the run. */

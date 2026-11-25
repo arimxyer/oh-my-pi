@@ -174,6 +174,11 @@ export class TranscriptPresenter {
 				if (blocks.some(block => untrack(() => host.shell.transcript.retired(block)))) this.#oweReplay();
 			},
 		});
+		// Fullscreen pins an open run's summary row while the window shows the run's cards.
+		host.shell.transcript.stickyHeader = (node, row) => {
+			const block = host.shell.transcript.blockOf(node);
+			return block ? this.#toolRuns.stickyHead(block, row) : undefined;
+		};
 	}
 
 	/** Install the extension transcript presenters; true when the set changed. */
@@ -458,6 +463,11 @@ export class TranscriptPresenter {
 			if (!untrack(newest.call.state).expanded) newest.call.toggleShown();
 		} else if (run === undefined) newest.call.toggleShown();
 		return true;
+	}
+
+	/** Fold every open run of tool calls back to its summary row; false when tool activity is not collapsed. */
+	foldToolRuns(): boolean {
+		return this.#toolRuns.foldAll();
 	}
 
 	#presentCard(spec: ToolCallSpec, builtIn: boolean, before: TranscriptBlock | undefined): PendingTool {

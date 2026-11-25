@@ -762,4 +762,30 @@ describe("TermBackend fullscreen transcript", () => {
 		report(0, 0, "left", "release");
 		expect(copied).toEqual([[...lines("a", 6).slice(1), ...lines("b", 4)].join("\n")]);
 	});
+
+	it("pins the sticky header on the top row while the window shows what it heads", () => {
+		const driver = new FakeDriver();
+		const surface = createSurface(() => ({
+			main: [<rows key="h" lines={["HEAD"]} />, <rows key="b" lines={lines("b", 8)} />],
+			dock: <rows key="dock" lines={["dock"]} />,
+		}));
+		const [head, body] = surface.main();
+		const backend = new TermBackend({
+			surface,
+			driver,
+			theme: () => PLAIN_THEME,
+			separator: () => 0,
+			fullscreen: () => true,
+			stickyHeader: node => (node === body ? head : undefined),
+		});
+		backend.start();
+		const screen = (): string[] => driver.frames.at(-1)!.fullscreen!.map(row => stripEscapes(row).trimEnd());
+		// The tail (b3–b7) starts inside `b`: its header takes the top row.
+		expect(screen()).toEqual(["HEAD", "b4", "b5", "b6", "b7", "dock"]);
+		// At the top the header shows in place, nothing is pinned (the last window row says more is below).
+		driver.input!({ type: "key", key: { id: "ctrl+home", kind: "press", raw: "" } });
+		backend.renderNow();
+		expect(screen().slice(0, 4)).toEqual(["HEAD", "b0", "b1", "b2"]);
+		backend.stop();
+	});
 });

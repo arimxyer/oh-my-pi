@@ -1,7 +1,8 @@
 /**
  * The `/hotkeys` reference: the composer's fixed editing keys and every app
  * action with the keys the user's bindings give it, as markdown tables
- * (Navigation, Editing, Other). Unbound actions read `Disabled`.
+ * (Navigation, Editing, Tool activity, Fullscreen transcript, Other). Unbound
+ * actions read `Disabled`.
  */
 import type { Keybinding } from "../../config/keybindings/app-keybindings";
 import { canonicalKeyId } from "../../config/keybindings/key-id";
@@ -79,6 +80,45 @@ export function hotkeyGroups(keybindings: KeybindingsManager): HotkeyGroup[] {
 			],
 		},
 		{
+			title: "Tool activity",
+			rows: [
+				{
+					keys: [act("app.tools.toggleVisibility")],
+					action: "Cycle tool activity: shown → collapsed into one `▸ N tool calls` row per group → hidden",
+				},
+				{ keys: [act("app.tools.expand")], action: "Expand or collapse every tool card and every group" },
+				{ keys: [{ text: "Click a card's top row" }], action: "Expand or collapse that card alone" },
+				{
+					keys: [act("app.tools.toggleLatest")],
+					action: "Expand or collapse the newest card (collapsed: open or fold its group)",
+				},
+				{
+					keys: [{ text: "Click a `▸`/`▾` row" }],
+					action: "Open or fold that group (in fullscreen its row stays pinned on top while you scroll inside it)",
+				},
+				{ keys: [act("app.tools.foldRuns")], action: "Fold every open group" },
+			],
+		},
+		{
+			title: "Fullscreen transcript (`tui.fullscreen`)",
+			rows: [
+				{ keys: [{ text: "Mouse wheel" }], action: "Scroll the transcript" },
+				{
+					keys: [act("tui.transcript.pageUp"), { text: " / " }, act("tui.transcript.pageDown")],
+					action: "Scroll a page (an open autocomplete menu pages itself)",
+				},
+				{
+					keys: [act("tui.transcript.top"), { text: " / " }, act("tui.transcript.bottom")],
+					action: "Jump to the top / back to the bottom and follow new output",
+				},
+				{
+					keys: [{ text: "Drag" }],
+					action: "Select text; release copies it (the wheel or the window's edges scroll while you drag)",
+				},
+				{ keys: [keys("shift"), { text: "+drag" }], action: "The terminal's own selection" },
+			],
+		},
+		{
 			title: "Other",
 			rows: [
 				{ keys: [keys("tab")], action: "Path completion / accept autocomplete" },
@@ -94,9 +134,6 @@ export function hotkeyGroups(keybindings: KeybindingsManager): HotkeyGroup[] {
 				{ keys: [act("app.model.select")], action: "Select model (set roles)" },
 				{ keys: [act("app.plan.toggle")], action: "Toggle plan mode" },
 				{ keys: [act("app.history.search")], action: "Search prompt history" },
-				{ keys: [act("app.tools.expand")], action: "Toggle tool output expansion" },
-				{ keys: [act("app.tools.toggleLatest")], action: "Fold or unfold the newest tool card" },
-				{ keys: [act("app.tools.toggleVisibility")], action: "Cycle tool activity: shown, collapsed, hidden" },
 				{
 					keys: [act("app.links.hint")],
 					action: "Pick an extension link on screen by its tag; press again to browse the whole transcript",

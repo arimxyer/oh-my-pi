@@ -171,6 +171,7 @@ export class Shell {
 			...(options.textSizing ? { textSizing: options.textSizing } : {}),
 			...(options.fullscreen ? { fullscreen: options.fullscreen } : {}),
 			...(options.onCopy ? { onCopy: options.onCopy } : {}),
+			stickyHeader: (node, row) => this.transcript.stickyHeader?.(node, row),
 			...(options.clock ? { clock: options.clock } : {}),
 			beforeTerminalRenderer: ensureTerminalStylesLoaded,
 		});

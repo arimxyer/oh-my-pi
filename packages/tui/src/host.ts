@@ -72,6 +72,8 @@ export interface HostOptions {
 	readonly fullscreen?: Accessor<boolean>;
 	/** Text selected in the fullscreen transcript, on mouse release (terminal renderer only). */
 	readonly onCopy?: (text: string) => void;
+	/** Fullscreen: a node to pin on the transcript window's top row (see `TermBackendOptions.stickyHeader`). */
+	readonly stickyHeader?: (node: UiNode, row: number) => UiNode | undefined;
 	/** Driver configuration (resize policy, image budget, test streams). */
 	readonly driver?: TerminalDriverOptions;
 	/**
@@ -393,6 +395,7 @@ export async function startHost(options: HostOptions): Promise<Host> {
 			...(options.textSizing ? { textSizing: options.textSizing } : {}),
 			...(options.fullscreen ? { fullscreen: options.fullscreen } : {}),
 			...(options.onCopy ? { onCopy: options.onCopy } : {}),
+			...(options.stickyHeader ? { stickyHeader: options.stickyHeader } : {}),
 			...(options.clock ? { clock: options.clock } : {}),
 			...(options.onKey ? { onKey: options.onKey } : {}),
 			...(options.intercept ? { intercept: options.intercept } : {}),

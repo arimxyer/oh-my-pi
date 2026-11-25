@@ -115,4 +115,37 @@ describe("collapsed tool activity", () => {
 		expect(folded).toContain("▸ 2 tool calls");
 		expect(folded).not.toContain("second 29");
 	});
+
+	it("pins an open group's row on top in fullscreen while scrolled into it, and folds it from there", () => {
+		const ctx = createInteractiveModeContext();
+		contextDisplay(ctx).collapseToolActivity.set(true);
+		for (const id of ["one", "two", "three"])
+			bash(ctx, id, Array.from({ length: 8 }, (_, i) => `${id} line ${i}`).join("\n"));
+		ctx.toggleNewestToolCard();
+		const term = attachTerminal(ctx, { columns: 100, rows: 16, fullscreen: true });
+		// The window follows the tail: the group's own row is far above, its pinned copy on top.
+		expect(term.screen()[0]).toContain("▾ 3 tool calls");
+		expect(term.screen().join("\n")).toContain("three line 7");
+		term.mouse({ row: 0, col: 2, button: "left", action: "press", mods: [] });
+		const folded = term.screen().join("\n");
+		expect(folded).toContain("▸ 3 tool calls");
+		expect(folded).not.toContain("line");
+		term.dispose();
+	});
+
+	it("folds every open group with the fold-all key, also under expand-all", () => {
+		const ctx = createInteractiveModeContext();
+		const display = contextDisplay(ctx);
+		display.collapseToolActivity.set(true);
+		bash(ctx, "one", "first-output");
+		ctx.presentAssistant(reply("Between the runs."));
+		bash(ctx, "two", "second-output");
+		display.toolOutputExpanded.set(true);
+		expect(renderTranscript(ctx).join("\n")).toContain("first-output");
+		expect(ctx.foldToolRuns()).toBe(true);
+		const text = renderTranscript(ctx).join("\n");
+		expect(text).not.toContain("first-output");
+		expect(text).not.toContain("second-output");
+		expect(text).toContain("▸ 1 tool call");
+	});
 });

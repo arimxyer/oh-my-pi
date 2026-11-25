@@ -1100,6 +1100,8 @@ export interface InteractiveModeContext {
 	toggleToolOutputExpansion(): void;
 	/** Fold or unfold the newest tool card alone; false when the transcript has none. */
 	toggleNewestToolCard(): boolean;
+	/** Fold every open run of tool calls back to its summary row; false when tool activity is not collapsed. */
+	foldToolRuns(): boolean;
 	setToolsExpanded(expanded: boolean): void;
 	toggleThinkingBlockVisibility(): void;
 	handlePlanModeCommand(

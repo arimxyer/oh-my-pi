@@ -139,6 +139,11 @@ export class Transcript {
 	onSelect: ((item: string) => void) | undefined;
 	/** An action no node inside a block handled (`subagents.focus=<id>` from a task card's agent row). */
 	onAction: ((act: string) => void) | undefined;
+	/**
+	 * Fullscreen: the node to pin on the window's top row while `node` (a block's node, at row `row`
+	 * of it) is the first one shown (an open tool run's summary row).
+	 */
+	stickyHeader: ((node: UiNode, row: number) => UiNode | undefined) | undefined;
 
 	/** Blocks in order (reactive); while {@link stage}d, the staged ones. */
 	readonly blocks: Accessor<readonly TranscriptBlock[]> = () => this.#target().entries();

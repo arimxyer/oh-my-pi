@@ -67,7 +67,7 @@ import type { BlockOptions, InputInterceptor, OverlayOptions } from "../../src/u
 import { ViewList } from "../../src/ui/shell/views";
 import type { StatusFacts, StatusLineSettings } from "@oh-my-pi/pi-coding-agent/ui/status/facts";
 import { TokenRateMeter } from "@oh-my-pi/pi-coding-agent/utils/token-rate";
-import { type JSXNode, type KeyEvent, type Signal, signal } from "@oh-my-pi/pi-tui";
+import { type JSXNode, type KeyEvent, type Signal, signal, type UiNode } from "@oh-my-pi/pi-tui";
 import type { InputEvent } from "@oh-my-pi/pi-tui/driver/index";
 import { createTestTerminal, type TestTerminal } from "@oh-my-pi/pi-tui/testing/terminal";
 
@@ -313,6 +313,7 @@ export function createInteractiveModeContext(overrides: ContextOverrides = {}): 
 			presenter().presentToolCall(...args),
 		),
 		toggleNewestToolCard: vi.fn(() => presenter().toggleNewestTool()),
+		foldToolRuns: vi.fn(() => presenter().foldToolRuns()),
 		presentReadGroup: vi.fn((...args: Parameters<TranscriptPresenter["presentReadGroup"]>) =>
 			presenter().presentReadGroup(...args),
 		),
@@ -575,7 +576,7 @@ function register<T>(list: T[], handler: T): () => void {
  */
 export function attachTerminal(
 	ctx: InteractiveModeContext,
-	options: { columns?: number; rows?: number } = {},
+	options: { columns?: number; rows?: number; fullscreen?: boolean } = {},
 ): TestTerminal {
 	const input = inputs.get(ctx);
 	if (!input) throw new Error("not a createInteractiveModeContext() context");
@@ -596,6 +597,13 @@ export function attachTerminal(
 		surface: ctx.shell.surface,
 		intercept: event => intercept(event, input.interceptors.length - 1),
 		onKey: key => input.globalKeys.toReversed().some(handler => handler(key)),
+		// The shell's fullscreen wiring: the transcript window and its pinned headers.
+		...(options.fullscreen
+			? {
+					fullscreen: () => true,
+					stickyHeader: (node: UiNode, row: number) => ctx.shell.transcript.stickyHeader?.(node, row),
+				}
+			: {}),
 	});
 	Object.assign(ctx.shell, {
 		input: (event: InputEvent, routing?: { readonly after?: InputInterceptor }) => {

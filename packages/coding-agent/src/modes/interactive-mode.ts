@@ -8479,6 +8479,10 @@ export class InteractiveMode implements InteractiveModeContext {
 		return this.#presenter.toggleNewestTool();
 	}
 
+	foldToolRuns(): boolean {
+		return this.#presenter.foldToolRuns();
+	}
+
 	setToolsExpanded(expanded: boolean): void {
 		this.#inputController.setToolsExpanded(expanded);
 	}

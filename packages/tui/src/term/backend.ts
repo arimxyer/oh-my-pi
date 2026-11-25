@@ -110,6 +110,12 @@ export interface TermBackendOptions {
 	 * the selection is drawn but copies nothing.
 	 */
 	readonly onCopy?: (text: string) => void;
+	/**
+	 * Fullscreen: a node to pin on the window's top row while `node` (a `main` node, at row `row` of
+	 * its block; negative inside the separator above it) is the first one shown, e.g. the header of
+	 * a group the window scrolled into. Its first row is drawn there and takes clicks.
+	 */
+	readonly stickyHeader?: (node: UiNode, row: number) => UiNode | undefined;
 }
 
 /** A history batch offered to the driver until it acknowledges the id. */
@@ -777,6 +783,20 @@ export class TermBackend {
 					cursor = { row: top + caret.row, col: caret.col };
 				for (const hit of block.hits ?? []) {
 					if (top + hit.row < capacity && top + hit.row + hit.height > 0) hits.push({ hit, top, left: 0 });
+				}
+			}
+			const first = map[0];
+			const sticky =
+				first && capacity > 1
+					? this.#options.stickyHeader?.(first.node, first.offset - source.lead(first.index))
+					: undefined;
+			if (sticky) {
+				const head = this.#paint(sticky, width);
+				if (head.rows.length > 0) {
+					rows[0] = head.rows[0]!;
+					// After the window's own targets: the pinned row takes the clicks on it.
+					for (const hit of head.hits ?? [])
+						if (hit.row === 0) hits.push({ hit: { ...hit, height: 1 }, top: 0, left: 0 });
 				}
 			}
 			while (rows.length < capacity) rows.push("");
