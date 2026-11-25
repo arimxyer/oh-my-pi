@@ -92,6 +92,14 @@ export class ToolRuns {
 		this.#members.set(next);
 	}
 
+	/** `block` left the transcript: forget it (its call and closures go with it). */
+	remove(block: TranscriptBlock | undefined): void {
+		if (!block || !untrack(this.#members).has(block)) return;
+		const next = new Map(untrack(this.#members));
+		next.delete(block);
+		this.#members.set(next);
+	}
+
 	#choiceOf(first: TranscriptBlock): Signal<{ readonly open: boolean; readonly epoch: number } | undefined> {
 		let choice = this.#choices.get(first);
 		if (!choice) {

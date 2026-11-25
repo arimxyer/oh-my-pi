@@ -525,6 +525,7 @@ export class TranscriptPresenter {
 			};
 			onCleanup(() => {
 				if (this.#newestTool?.call === call) this.#newestTool = undefined;
+				this.#toolRuns.remove(untrack(self));
 			});
 			// A block paints its first node only: the run's summary row and the card share one slot.
 			const slot = (
@@ -646,6 +647,7 @@ export class TranscriptPresenter {
 				this.#presenters();
 				untrack(() => group.refreshPresentation());
 			});
+			onCleanup(() => this.#toolRuns.remove(untrack(self)));
 			const notices = (): JSXNode[] =>
 				[...finals().entries()].map(([id, result]) => this.#spotlightNotice(id, result));
 			const slot = (
