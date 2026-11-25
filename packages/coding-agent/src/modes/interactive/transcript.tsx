@@ -465,9 +465,12 @@ export class TranscriptPresenter {
 		return true;
 	}
 
-	/** Fold every open run of tool calls back to its summary row; false when tool activity is not collapsed. */
-	foldToolRuns(): boolean {
-		return this.#toolRuns.foldAll();
+	/**
+	 * Open or fold every run of tool calls: folds them all when any is open, else opens them all.
+	 * Undefined when tool activity is not collapsed.
+	 */
+	toggleToolRuns(): "opened" | "folded" | undefined {
+		return this.#toolRuns.toggleAll();
 	}
 
 	#presentCard(spec: ToolCallSpec, builtIn: boolean, before: TranscriptBlock | undefined): PendingTool {

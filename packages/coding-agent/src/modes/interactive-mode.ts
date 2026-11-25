@@ -8479,8 +8479,8 @@ export class InteractiveMode implements InteractiveModeContext {
 		return this.#presenter.toggleNewestTool();
 	}
 
-	foldToolRuns(): boolean {
-		return this.#presenter.foldToolRuns();
+	toggleToolRuns(): "opened" | "folded" | undefined {
+		return this.#presenter.toggleToolRuns();
 	}
 
 	setToolsExpanded(expanded: boolean): void {

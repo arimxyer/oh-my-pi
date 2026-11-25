@@ -96,7 +96,10 @@ export function hotkeyGroups(keybindings: KeybindingsManager): HotkeyGroup[] {
 					keys: [{ text: "Click a `▸`/`▾` row" }],
 					action: "Open or fold that group (in fullscreen its row stays pinned on top while you scroll inside it)",
 				},
-				{ keys: [act("app.tools.foldRuns")], action: "Fold every open group" },
+				{
+					keys: [act("app.tools.toggleRuns")],
+					action: "Open every group, or fold them all when any is open",
+				},
 			],
 		},
 		{

@@ -60,10 +60,10 @@ export class ToolRuns {
 	>();
 	/** Bumped whenever expand-all flips or every run is folded: it resets every choice made by hand. */
 	readonly #epoch: Accessor<number>;
-	/** Folds of every run at once (the fold-all key). */
+	/** Opens or folds of every run at once (the toggle-all key). */
 	readonly #resets = signal(0);
-	/** The epoch in which every run was folded: until the next one, runs stay folded unless opened by hand. */
-	readonly #foldedAll = signal<number | undefined>(undefined);
+	/** Every run opened or folded at once, with its epoch: until the next one, runs follow it unless set by hand. */
+	readonly #all = signal<{ readonly open: boolean; readonly epoch: number } | undefined>(undefined);
 	/**
 	 * Each tool block's run (its blocks in order). Weak: the last computed value lingers until the
 	 * next read, and blocks the transcript dropped must not live on in it.
@@ -131,7 +131,8 @@ export class ToolRuns {
 		const epoch = this.#epoch();
 		const choice = this.#choiceOf(first)();
 		if (choice !== undefined && choice.epoch === epoch) return choice.open;
-		return this.#foldedAll() === epoch ? false : this.#host.expandAll();
+		const all = this.#all();
+		return all !== undefined && all.epoch === epoch ? all.open : this.#host.expandAll();
 	}
 
 	#setOpen(run: readonly TranscriptBlock[], open: boolean): void {
@@ -159,13 +160,22 @@ export class ToolRuns {
 		return open ? "opened" : "folded";
 	}
 
-	/** Fold every run (the fold-all key); false when tool activity is not collapsed. */
-	foldAll(): boolean {
-		if (!untrack(this.#host.collapse)) return false;
+	/**
+	 * Open or fold every run (the toggle-all key): folds them all when any is open, else opens them
+	 * all (cards keep their own folds). Undefined when tool activity is not collapsed.
+	 */
+	toggleAll(): "opened" | "folded" | undefined {
+		if (!untrack(this.#host.collapse)) return undefined;
+		const runs = untrack(this.#runs);
+		const members = [...untrack(this.#members).keys()];
+		const anyOpen = members.some(block => {
+			const first = runs.get(block)?.[0];
+			return first !== undefined && untrack(() => this.#open(first));
+		});
 		this.#resets.set(untrack(this.#resets) + 1);
-		this.#foldedAll.set(untrack(this.#epoch));
-		this.#host.redraw([...untrack(this.#members).keys()]);
-		return true;
+		this.#all.set({ open: !anyOpen, epoch: untrack(this.#epoch) });
+		this.#host.redraw(members);
+		return anyOpen ? "folded" : "opened";
 	}
 
 	/**

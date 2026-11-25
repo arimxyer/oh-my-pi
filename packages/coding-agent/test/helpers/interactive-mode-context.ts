@@ -313,7 +313,7 @@ export function createInteractiveModeContext(overrides: ContextOverrides = {}): 
 			presenter().presentToolCall(...args),
 		),
 		toggleNewestToolCard: vi.fn(() => presenter().toggleNewestTool()),
-		foldToolRuns: vi.fn(() => presenter().foldToolRuns()),
+		toggleToolRuns: vi.fn(() => presenter().toggleToolRuns()),
 		presentReadGroup: vi.fn((...args: Parameters<TranscriptPresenter["presentReadGroup"]>) =>
 			presenter().presentReadGroup(...args),
 		),

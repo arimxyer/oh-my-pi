@@ -133,19 +133,32 @@ describe("collapsed tool activity", () => {
 		term.dispose();
 	});
 
-	it("folds every open group with the fold-all key, also under expand-all", () => {
+	it("opens every group with the toggle-all key, and folds them all when any is open, also under expand-all", () => {
 		const ctx = createInteractiveModeContext();
 		const display = contextDisplay(ctx);
 		display.collapseToolActivity.set(true);
 		bash(ctx, "one", "first-output");
 		ctx.presentAssistant(reply("Between the runs."));
 		bash(ctx, "two", "second-output");
-		display.toolOutputExpanded.set(true);
-		expect(renderTranscript(ctx).join("\n")).toContain("first-output");
-		expect(ctx.foldToolRuns()).toBe(true);
-		const text = renderTranscript(ctx).join("\n");
+
+		// Everything folded: the key opens every group.
+		expect(ctx.toggleToolRuns()).toBe("opened");
+		let text = renderTranscript(ctx).join("\n");
+		expect(text).toContain("first-output");
+		expect(text).toContain("second-output");
+
+		// Any open: the key folds them all.
+		expect(ctx.toggleToolRuns()).toBe("folded");
+		text = renderTranscript(ctx).join("\n");
 		expect(text).not.toContain("first-output");
 		expect(text).not.toContain("second-output");
+
+		// Expand-all opened them: the key folds them all.
+		display.toolOutputExpanded.set(true);
+		expect(renderTranscript(ctx).join("\n")).toContain("first-output");
+		expect(ctx.toggleToolRuns()).toBe("folded");
+		text = renderTranscript(ctx).join("\n");
+		expect(text).not.toContain("first-output");
 		expect(text).toContain("▸ 1 tool call");
 	});
 });

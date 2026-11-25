@@ -682,12 +682,15 @@ export class InputController {
 			if (!this.ctx.toggleNewestToolCard()) this.ctx.showStatus("No tool card to fold");
 			return true;
 		}
-		if (km.matches(key, "app.tools.foldRuns")) {
+		if (km.matches(key, "app.tools.toggleRuns")) {
 			const toggle = actionKey("app.tools.toggleVisibility", this.ctx.keybindings);
+			const done = this.ctx.toggleToolRuns();
 			this.ctx.showStatus(
-				this.ctx.foldToolRuns()
-					? "Folded every group of tool calls"
-					: `Tool activity is not collapsed${toggle ? ` (${toggle} cycles it)` : ""}`,
+				done === "opened"
+					? "Opened every group of tool calls"
+					: done === "folded"
+						? "Folded every group of tool calls"
+						: `Tool activity is not collapsed${toggle ? ` (${toggle} cycles it)` : ""}`,
 			);
 			return true;
 		}
