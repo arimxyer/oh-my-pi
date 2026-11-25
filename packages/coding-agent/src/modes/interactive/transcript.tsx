@@ -446,16 +446,17 @@ export class TranscriptPresenter {
 
 	/**
 	 * Fold or unfold the newest tool card alone (as a click on its header does); false when there is
-	 * none. A card folded into a collapsed run opens the run and shows the card in full.
+	 * none. While tool activity is collapsed it opens the card's run, the card in full, and folds the
+	 * run again on the next press.
 	 */
 	toggleNewestTool(): boolean {
 		const newest = this.#newestTool;
 		if (!newest) return false;
 		const block = untrack(newest.block);
-		if (block && untrack(() => this.#toolRuns.folded(block))) {
-			this.#toolRuns.reveal(block);
+		const run = block && this.#toolRuns.toggleRun(block);
+		if (run === "opened") {
 			if (!untrack(newest.call.state).expanded) newest.call.toggleShown();
-		} else newest.call.toggleShown();
+		} else if (run === undefined) newest.call.toggleShown();
 		return true;
 	}
 

@@ -130,10 +130,17 @@ export class ToolRuns {
 		return run !== undefined && !this.#open(run[0]!);
 	}
 
-	/** Show the blocks of `block`'s run, when it is folded (the newest-card key opens a card inside one). */
-	reveal(block: TranscriptBlock): void {
+	/**
+	 * Open or fold `block`'s run (the newest-card key, while collapsing): "opened" or "folded";
+	 * undefined when not collapsing or `block` is in no run.
+	 */
+	toggleRun(block: TranscriptBlock): "opened" | "folded" | undefined {
+		if (!untrack(this.#host.collapse)) return undefined;
 		const run = untrack(this.#runs).get(block);
-		if (run && untrack(() => this.folded(block))) this.#setOpen(run, true);
+		if (!run) return undefined;
+		const open = !untrack(() => this.#open(run[0]!));
+		this.#setOpen(run, open);
+		return open ? "opened" : "folded";
 	}
 
 	/** The summary row `block` draws: its run's, when collapsing and `block` starts the run. */

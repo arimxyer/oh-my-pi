@@ -108,5 +108,11 @@ describe("collapsed tool activity", () => {
 		expect(text).toContain("▾ 2 tool calls");
 		expect(text).toContain("second 0");
 		expect(text).toContain("second 29");
+
+		// The next press folds the run back into its summary row.
+		expect(ctx.toggleNewestToolCard()).toBe(true);
+		const folded = renderTranscript(ctx).join("\n");
+		expect(folded).toContain("▸ 2 tool calls");
+		expect(folded).not.toContain("second 29");
 	});
 });
