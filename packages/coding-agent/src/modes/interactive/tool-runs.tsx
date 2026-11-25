@@ -3,7 +3,8 @@
  * Collapsed tool activity (`display.collapseToolActivity`): each run of tool
  * blocks (cards and read groups with no reply text, prompt or other block
  * between them) draws as one summary row at its first block, `▸ 5 tool calls
- * · bash ×3, edit ×2 · 1 failed`, spinning while a member runs. A click on the row
+ * · bash ×3, edit ×2 · 1 failed · Edit src/foo.ts` (the newest call last),
+ * spinning while a member runs. A click on the row
  * (or its fold key) shows the run's blocks in place; the row stays as their
  * header and folds them again.
  *
@@ -23,6 +24,8 @@ export interface ToolRunMember {
 	readonly running: Accessor<boolean>;
 	/** How many of its calls ended in an error. */
 	readonly failed: Accessor<number>;
+	/** Title and target of its newest call (`Edit src/foo.ts`), when it has one. */
+	readonly latest: Accessor<string | undefined>;
 }
 
 /** What {@link ToolRuns} reads from the presenter. */
@@ -201,12 +204,14 @@ export class ToolRuns {
 		const counts = new Map<string, number>();
 		let running = false;
 		let failed = 0;
+		let latest: string | undefined;
 		for (const member of run) {
 			const info = members.get(member);
 			if (!info) continue;
 			for (const name of info.names()) counts.set(name, (counts.get(name) ?? 0) + 1);
 			if (info.running()) running = true;
 			failed += info.failed();
+			latest = info.latest() ?? latest;
 		}
 		let calls = 0;
 		for (const count of counts.values()) calls += count;
@@ -214,7 +219,7 @@ export class ToolRuns {
 		const shown = this.#open(block);
 		const label = `${shown ? "▾" : "▸"} ${calls} tool call${calls === 1 ? "" : "s"}`;
 		const names = [...counts].map(([name, count]) => (count === 1 ? name : `${name} ×${count}`)).join(", ");
-		const detail = failed > 0 ? `${names} · ${failed} failed` : names;
+		const detail = [names, failed > 0 ? `${failed} failed` : undefined, latest].filter(Boolean).join(" · ");
 		return (
 			<tool
 				key="tool-run"

@@ -89,6 +89,17 @@ describe("collapsed tool activity", () => {
 		expect(runs).toEqual([expect.stringContaining("2 failed"), expect.not.stringContaining("failed")]);
 	});
 
+	it("ends a run's row with its newest call's title and target", () => {
+		const ctx = createInteractiveModeContext();
+		contextDisplay(ctx).collapseToolActivity.set(true);
+		bash(ctx, "first", "ok");
+		bash(ctx, "second", "ok");
+
+		const [row] = renderTranscript(ctx, 160).filter(line => line.includes("tool call"));
+		expect(row).toMatch(/echo second\s*$/);
+		expect(row).not.toContain("echo first");
+	});
+
 	it("opens every run while ctrl+o expands all, and a click still folds one", () => {
 		const ctx = createInteractiveModeContext();
 		const display = contextDisplay(ctx);

@@ -47,6 +47,8 @@ import "../../ui/styles/messages";
 import "../../ui/styles/tools";
 import "../../ui/styles/transcript/exec-run";
 import "../../ui/styles/transcript/read-group";
+import { plainText } from "../../ui/styles/panels/common";
+import { shortenPath } from "../../utils/render-utils";
 import { defaultPresenter } from "../../ui/tools/default";
 import { toolEditMode } from "../../ui/tools/edit";
 import { legacyPresenter, type LegacyToolRenderer } from "../../ui/tools/legacy";
@@ -556,6 +558,14 @@ export class TranscriptPresenter {
 			names: () => [call.name],
 			running: () => call.facts.running(),
 			failed: () => (call.facts.result()?.isError === true && !call.facts.partial() ? 1 : 0),
+			latest: () => {
+				const view = call.view();
+				const title = plainText(view?.head?.title ?? view?.label ?? call.label);
+				const head = view?.head;
+				const target = plainText(head?.target) || head?.command;
+				const shown = target && head?.targetKind === "path" ? shortenPath(target) : target;
+				return [title, shown].filter(Boolean).join(" ") || undefined;
+			},
 		});
 		const settleIfFinal = (result: ToolCallResult, partial: boolean): void => {
 			if (partial) return;
@@ -682,6 +692,10 @@ export class TranscriptPresenter {
 			names: () => group.entries().map(() => "read"),
 			running: () => group.entries().some(entry => entry.status === "pending"),
 			failed: () => group.entries().filter(entry => entry.status === "error").length,
+			latest: () => {
+				const path = group.entries().at(-1)?.path;
+				return path ? `Read ${shortenPath(path)}` : undefined;
+			},
 		});
 		const pending: PendingTool = {
 			block,
