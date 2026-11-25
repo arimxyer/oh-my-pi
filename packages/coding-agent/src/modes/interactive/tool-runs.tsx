@@ -50,8 +50,11 @@ export class ToolRuns {
 	>();
 	/** Bumped whenever expand-all flips: it resets every choice made by hand, as ctrl+o resets card folds. */
 	readonly #epoch: Accessor<number>;
-	/** Each tool block's run (its blocks in order). */
-	readonly #runs: Accessor<ReadonlyMap<TranscriptBlock, readonly TranscriptBlock[]>>;
+	/**
+	 * Each tool block's run (its blocks in order). Weak: the last computed value lingers until the
+	 * next read, and blocks the transcript dropped must not live on in it.
+	 */
+	readonly #runs: Accessor<WeakMap<TranscriptBlock, readonly TranscriptBlock[]>>;
 
 	constructor(host: ToolRunsHost) {
 		this.#host = host;
@@ -65,7 +68,7 @@ export class ToolRuns {
 		});
 		this.#runs = computed(() => {
 			const members = this.#members();
-			const runs = new Map<TranscriptBlock, readonly TranscriptBlock[]>();
+			const runs = new WeakMap<TranscriptBlock, readonly TranscriptBlock[]>();
 			let run: TranscriptBlock[] = [];
 			const close = (): void => {
 				for (const block of run) runs.set(block, run);
