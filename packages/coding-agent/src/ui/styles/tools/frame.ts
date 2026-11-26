@@ -274,7 +274,7 @@ export function bracketed(theme: Theme, text: string): string {
 
 /** How a collapsed card says it opens: a click on its header (that card), or the expand key (every card). */
 export function expandHintText(theme: Theme): string {
-	return `click or ${expandKeyLabel(theme)}: Expand`;
+	return `click title or ${expandKeyLabel(theme)}: Expand`;
 }
 
 /** Collapsed command/code previews show at most this many rows (the viewport tail window). */

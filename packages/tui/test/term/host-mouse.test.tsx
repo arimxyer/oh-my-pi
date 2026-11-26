@@ -4,7 +4,7 @@
  * (no report would clear its band anymore).
  */
 import { describe, expect, it } from "bun:test";
-import { createSurface, startHost } from "@oh-my-pi/pi-tui";
+import { createSurface, signal, startHost } from "@oh-my-pi/pi-tui";
 import { createTerminalDriver } from "@oh-my-pi/pi-tui/driver/index";
 import { settle } from "@oh-my-pi/pi-tui/surface";
 import { TermBackend } from "@oh-my-pi/pi-tui/term/backend";
@@ -42,6 +42,53 @@ describe("Host.setMouse", () => {
 			memory.feed("\x1b[<0;1;1M");
 			expect(selected).toEqual(["a"]);
 			expect(backend.environment.hover?.()).toBeNull();
+		} finally {
+			backend.stop();
+			await driver.stop();
+			surface.dispose();
+		}
+	});
+
+	it("folds a collapsible card on a click on its head row, not on its body", async () => {
+		const memory = memoryTerminal({ columns: 20, rows: 6 });
+		const driver = createTerminalDriver(memory.options);
+		const toggles: boolean[] = [];
+		const collapsed = signal(true);
+		const surface = createSurface(() => ({
+			dock: (
+				<card
+					head={[{ t: "Card" }]}
+					variant="bare"
+					collapsible
+					collapsed={collapsed}
+					preview={{ lines: 1 }}
+					onToggle={next => {
+						toggles.push(next);
+						collapsed.set(next);
+					}}
+				>
+					<rows lines={["one", "two"]} />
+				</card>
+			),
+		}));
+		const backend = new TermBackend({ surface, driver, theme: () => loadThemeSync("dark") });
+		await driver.start();
+		try {
+			backend.start();
+			backend.renderNow();
+			// The head row is the card's only hit: find it with pointer motion.
+			let head = 0;
+			for (let row = 1; row <= 6 && head === 0; row++) {
+				memory.feed(`\x1b[<35;3;${row}M`);
+				if (backend.environment.hover?.()) head = row;
+			}
+			expect(head).toBeGreaterThan(0);
+			memory.feed(`\x1b[<0;3;${head + 1}M`);
+			expect(toggles).toEqual([]);
+			memory.feed(`\x1b[<0;3;${head}M`);
+			backend.renderNow();
+			memory.feed(`\x1b[<0;3;${head}M`);
+			expect(toggles).toEqual([false, true]);
 		} finally {
 			backend.stop();
 			await driver.stop();

@@ -345,7 +345,7 @@ export function IrcMessageBlock(props: {
 	};
 	return (
 		<ToolActivity visible={props.visible}>
-			<IrcMessageCard message={card} expanded={() => read(props.expanded)} />
+			<IrcMessageCard message={card} expanded={props.expanded} />
 		</ToolActivity>
 	);
 }
@@ -362,5 +362,5 @@ export function ParentIrcMessage(props: {
 		body: props.parentIrc.body,
 		timestamp: props.timestamp,
 	};
-	return <IrcMessageCard message={card} expanded={() => read(props.expanded)} />;
+	return <IrcMessageCard message={card} expanded={props.expanded} />;
 }

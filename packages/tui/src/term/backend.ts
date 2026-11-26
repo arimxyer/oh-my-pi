@@ -1310,6 +1310,11 @@ export class TermBackend {
 				bubbleEvent(path, { type: "select", key: keypathOf(path), item: hit.item });
 				return;
 			}
+			if (mouse.action === "press" && mouse.button === "left" && hit.toggle) {
+				const collapsed = (hit.node.props() as { collapsed?: boolean }).collapsed === true;
+				bubbleEvent(path, { type: "toggle", key: keypathOf(path), collapsed: !collapsed });
+				return;
+			}
 		}
 		const overWindow =
 			this.#fullscreenTranscript() && windowRow < this.#windowRows && !this.#surface.layer().some(isFullscreen);

@@ -35,6 +35,8 @@ export interface Hit {
 	readonly item?: string;
 	/** The action a click runs (buttons). */
 	readonly act?: string;
+	/** A left click folds or unfolds the node (a collapsible node's head row; see {@link paintNode}). */
+	readonly toggle?: boolean;
 }
 
 /** What a painter returns: rows (none wider than the width it got), plus cursor and hit regions. */
@@ -83,6 +85,7 @@ function sameBlock(a: Block, b: Block): boolean {
 				(x.node !== y.node ||
 					x.item !== y.item ||
 					x.act !== y.act ||
+					x.toggle !== y.toggle ||
 					x.row !== y.row ||
 					x.col !== y.col ||
 					x.width !== y.width ||
@@ -276,7 +279,7 @@ export function paintNode(env: PaintEnvironment, node: UiNode, width: number, he
 					if (node.props().hidden === true) return EMPTY_BLOCK;
 					const painter = painterFor(node);
 					if (!painter) throw new Error(`pi-tui: no terminal painter for <${node.kind}>`);
-					return painter(node, cx);
+					return withFoldHit(node, painter(node, cx), width);
 				},
 				{ equals: sameBlock },
 			),
@@ -285,6 +288,18 @@ export function paintNode(env: PaintEnvironment, node: UiNode, width: number, he
 		cache.entries.set(size, entry);
 	}
 	return entry.block();
+}
+
+/**
+ * `block` with its first row clickable as `node`'s fold toggle, when `node`
+ * is collapsible and handles `toggle` itself (no event can bubble to an
+ * unrelated ancestor). Prepended, so hits the painter drew there win.
+ */
+function withFoldHit(node: UiNode, block: Block, width: number): Block {
+	if (block.rows.length === 0 || width <= 0 || !node.handlers.onToggle) return block;
+	if ((node.props() as { collapsible?: boolean }).collapsible !== true) return block;
+	const fold: Hit = { row: 0, col: 0, width, height: 1, node, toggle: true };
+	return { ...block, hits: block.hits ? [fold, ...block.hits] : [fold] };
 }
 
 /** Drop every cached block of `node`. */

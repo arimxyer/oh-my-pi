@@ -43,5 +43,5 @@ test("generic card rows use the preset's branch and advertise the rebound expand
 	expect(plainToolRows(call, env)).toContain(`  '- query="weather"`);
 	call.setExecutionStarted();
 	call.updateResult({ content: [{ type: "text", text: "Light rain" }] }, false);
-	expect(plainToolRows(call, env)).toContain(" [F9: Expand]");
+	expect(plainToolRows(call, env)).toContain(" [click title or F9: Expand]");
 });

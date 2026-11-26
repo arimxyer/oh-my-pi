@@ -42,6 +42,9 @@
 ### Removed
 
 - Removed unused `parse*Args`/`print*Help` exports from `@oh-my-pi/pi-coding-agent/cli/{config,grep,plugin,setup,shell,web-search,update}-cli`; the subcommands parse flags through `src/commands/*` ([#20526](https://github.com/can1357/oh-my-pi/pull/20526))
+### Changed
+
+- IRC message cards now show a `▸`/`▾` marker and fold on a click on their title row; collapsed-card hints now read `click title or <key>: Expand`.
 
 ## [19.2.1] - 2026-11-25
 

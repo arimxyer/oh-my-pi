@@ -9,9 +9,10 @@
  * transcript's expand state reaches it as `term.expanded`.
  */
 import type { TspSpan } from "@oh-my-pi/pi-wire";
-import type { JSXNode } from "@oh-my-pi/pi-tui";
+import type { JSXNode, Reactive } from "@oh-my-pi/pi-tui";
 import type { Theme } from "@oh-my-pi/pi-tui/theme/contract";
 import { currentTheme } from "@oh-my-pi/pi-tui/theme/runtime";
+import { cardExpansion } from "../transcript/expansion";
 import { cleanText } from "./agent-common";
 
 export interface IrcMessage {
@@ -42,23 +43,26 @@ export function ircTitle(card: IrcMessage, theme: Theme): string {
 	}
 }
 
-/** One IRC message as a card. `expanded` is the transcript's expand state. */
-export function IrcMessageCard(props: { readonly message: IrcMessage; readonly expanded?: () => boolean }): JSXNode {
+/** One IRC message as a card. `expanded` is the transcript's expand state; a click on the head folds this card alone. */
+export function IrcMessageCard(props: { readonly message: IrcMessage; readonly expanded: Reactive<boolean> }): JSXNode {
 	const card = props.message;
 	const body = card.body ?? "";
 	const tail: TspSpan[] = [];
 	if (card.kind === "autoreply") tail.push({ s: "muted", t: " auto" });
 	if (card.kind === "workpool" && card.mode) tail.push({ s: "muted", t: ` ${cleanText(card.mode)}` });
 	if (card.replyTo) tail.push({ s: "muted", t: " reply" });
-	const expanded = props.expanded;
+	const collapsible = body.trim().length > 0;
+	const { expanded, toggle } = cardExpansion(props.expanded);
 	return (
 		<card
 			role={`omp.irc.${card.kind}`}
 			tone="info"
 			head={() => [{ s: "toolTitle strong", t: ircTitle(card, currentTheme()) }, ...tail]}
-			collapsible={body.trim().length > 0}
+			collapsible={collapsible}
+			collapsed={() => (collapsible ? !expanded() : undefined)}
 			preview={{ lines: 3 }}
-			term={() => ({ message: card, expanded: expanded?.() === true })}
+			term={() => ({ message: card, expanded: expanded() })}
+			onToggle={toggle}
 		>
 			{card.timestamp ? (
 				<row gap="xs">

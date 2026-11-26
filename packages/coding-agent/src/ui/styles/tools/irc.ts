@@ -1,10 +1,12 @@
 /**
- * `omp.irc.*` cards: `✉ IRC Anna ➤ Ben reply · 1m ago`, then the message's
+ * `omp.irc.*` cards: `▸ ✉ IRC Anna ➤ Ben reply · 1m ago`, then the message's
  * non-blank lines behind a dim quote rail — three (cut to the row) and an
- * expand hint while collapsed, every line wrapped once expanded.
+ * expand hint while collapsed, every line wrapped once expanded. The `▸`/`▾`
+ * head row is the card's click target.
  */
 import type { UiNode } from "@oh-my-pi/pi-tui";
 import { type Block, defineRolePainter, type PaintContext } from "@oh-my-pi/pi-tui/term/paint";
+import { marker } from "@oh-my-pi/pi-tui/term/painters/card";
 import { elapsedAt } from "@oh-my-pi/pi-tui/term/painters/elapsed";
 import { replaceTabs, truncate, visibleWidth, wrap } from "@oh-my-pi/pi-tui/text/width";
 import { formatAge } from "@oh-my-pi/pi-utils";
@@ -49,6 +51,8 @@ function paintIrcCard(node: UiNode, cx: PaintContext): Block {
 	const props = node.props() as {
 		head?: readonly TspSpan[];
 		term?: { message?: IrcMessage; expanded?: boolean };
+		collapsible?: boolean;
+		collapsed?: boolean;
 	};
 	const head = props.head ?? [];
 	const meta = head.slice(1).map(span => span.t.trim());
@@ -62,7 +66,7 @@ function paintIrcCard(node: UiNode, cx: PaintContext): Block {
 		meta.push(formatAge(Math.max(1, Math.round(ms / 1000))));
 	}
 	const title = props.term?.message ? ircTitle(props.term.message, theme) : (head[0]?.t ?? "");
-	let line = `${theme.fg("accent", theme.symbols.symbol("tool.irc"))} ${theme.fg("accent", title)}`;
+	let line = `${marker(theme, props.collapsible, props.collapsed)}${theme.fg("accent", theme.symbols.symbol("tool.irc"))} ${theme.fg("accent", title)}`;
 	if (meta.length > 0) line += ` ${theme.fg("dim", meta.join(" · "))}`;
 	const rows = [line];
 	const md = children.find(child => child.kind === "md");
