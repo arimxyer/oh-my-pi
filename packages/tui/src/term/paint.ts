@@ -15,6 +15,7 @@ import type { CellSize } from "../driver/images/fit";
 import type { ImageRequest, ImageRows, ImageSource } from "../driver/images/store";
 import type { UiKind, UiNode } from "../node";
 import { type Accessor, computed, createRoot, signal } from "../reactive";
+import { stripEscapes } from "../text/ansi";
 import type { Theme } from "../theme/contract";
 
 /** A cell position inside a block. */
@@ -279,7 +280,7 @@ export function paintNode(env: PaintEnvironment, node: UiNode, width: number, he
 					if (node.props().hidden === true) return EMPTY_BLOCK;
 					const painter = painterFor(node);
 					if (!painter) throw new Error(`pi-tui: no terminal painter for <${node.kind}>`);
-					return withFoldHit(node, painter(node, cx), width);
+					return withFoldHit(node, painter(node, cx), width, height);
 				},
 				{ equals: sameBlock },
 			),
@@ -291,14 +292,18 @@ export function paintNode(env: PaintEnvironment, node: UiNode, width: number, he
 }
 
 /**
- * `block` with its first row clickable as `node`'s fold toggle, when `node`
- * is collapsible and handles `toggle` itself (no event can bubble to an
- * unrelated ancestor). Prepended, so hits the painter drew there win.
+ * `block` with its head (first non-blank) row clickable as `node`'s fold
+ * toggle, when `node` is collapsible and handles `toggle` itself (no event
+ * can bubble to an unrelated ancestor). Prepended, so hits the painter drew
+ * there win.
  */
-function withFoldHit(node: UiNode, block: Block, width: number): Block {
-	if (block.rows.length === 0 || width <= 0 || !node.handlers.onToggle) return block;
+function withFoldHit(node: UiNode, block: Block, width: number, height: number | undefined): Block {
+	// A fixed-height allocation may cut the head row away.
+	if (width <= 0 || height !== undefined || !node.handlers.onToggle) return block;
 	if ((node.props() as { collapsible?: boolean }).collapsible !== true) return block;
-	const fold: Hit = { row: 0, col: 0, width, height: 1, node, toggle: true };
+	const row = block.rows.findIndex(text => stripEscapes(text).trim() !== "");
+	if (row < 0) return block;
+	const fold: Hit = { row, col: 0, width, height: 1, node, toggle: true };
 	return { ...block, hits: block.hits ? [fold, ...block.hits] : [fold] };
 }
 

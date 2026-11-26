@@ -197,20 +197,9 @@ function paintLookRows(node: UiNode, cx: PaintContext): Block {
 	return look.paint(node, still);
 }
 
-/** `block` with its first drawn row as the block's fold target, when the block folds. */
-function withFoldTarget(node: UiNode, cx: PaintContext, block: Block): Block {
-	if (!toolProps(node).collapsible || cx.height !== undefined) return block;
-	const row = block.rows.findIndex(text => Bun.stripANSI(text).trim() !== "");
-	if (row < 0) return block;
-	// First, so targets the look drew on that row (links) take the click instead.
-	return { ...block, hits: [{ row, col: 0, width: cx.width, height: 1, node }, ...(block.hits ?? [])] };
-}
+defineRolePainter("tool", "omp.tool", paintToolBlock, { prefix: true });
 
-defineRolePainter("tool", "omp.tool", (node, cx) => withFoldTarget(node, cx, paintToolBlock(node, cx)), {
-	prefix: true,
-});
-
-// A press on the fold target folds or unfolds the block (its `onToggle` keeps the choice).
+// A press on the head row (the fold hit `paintNode` adds) folds or unfolds the block (its `onToggle` keeps the choice).
 defineRoleWidget(
 	"tool",
 	"omp.tool",
