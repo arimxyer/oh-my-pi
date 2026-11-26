@@ -47,7 +47,7 @@ import "../../ui/styles/messages";
 import "../../ui/styles/tools";
 import "../../ui/styles/transcript/exec-run";
 import "../../ui/styles/transcript/read-group";
-import { plainText } from "../../ui/styles/panels/common";
+import { plainText as flatText } from "../../ui/styles/panels/common";
 import { shortenPath } from "../../utils/render-utils";
 import { defaultPresenter } from "../../ui/tools/default";
 import { toolEditMode } from "../../ui/tools/edit";
@@ -560,9 +560,9 @@ export class TranscriptPresenter {
 			failed: () => (call.facts.result()?.isError === true && !call.facts.partial() ? 1 : 0),
 			latest: () => {
 				const view = call.view();
-				const title = plainText(view?.head?.title ?? view?.label ?? call.label);
+				const title = flatText(view?.head?.title ?? view?.label ?? call.label);
 				const head = view?.head;
-				const target = plainText(head?.target) || head?.command;
+				const target = flatText(head?.target) || head?.command;
 				const shown = target && head?.targetKind === "path" ? shortenPath(target) : target;
 				return [title, shown].filter(Boolean).join(" ") || undefined;
 			},
