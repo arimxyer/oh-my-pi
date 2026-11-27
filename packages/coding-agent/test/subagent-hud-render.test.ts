@@ -167,8 +167,14 @@ function clickTargets(model: SubagentHudModel, columns = 120): { rows: string[];
 			model.onToggle = () => {
 				target = "toggle";
 			};
+			const collapsed = model.collapsed();
 			term.mouse({ row, col: 2, button: "left", action: "press", mods: [] });
 			term.mouse({ row, col: 2, button: "left", action: "release", mods: [] });
+			// Restore the header fold before testing the next row's original position.
+			if (model.collapsed() !== collapsed) {
+				model.collapsed.set(collapsed);
+				term.render();
+			}
 			return target;
 		});
 		return { rows, targets };

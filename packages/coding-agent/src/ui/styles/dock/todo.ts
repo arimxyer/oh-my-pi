@@ -14,7 +14,7 @@
  */
 import type { UiNode } from "@oh-my-pi/pi-tui";
 import { type Block, defineRolePainter, EMPTY_BLOCK, type PaintContext } from "@oh-my-pi/pi-tui/term/paint";
-import { replaceTabs, visibleWidth, wrap } from "@oh-my-pi/pi-tui/text/width";
+import { replaceTabs, truncate, visibleWidth, wrap } from "@oh-my-pi/pi-tui/text/width";
 import type { Theme } from "@oh-my-pi/pi-tui/theme/contract";
 import { terminalPaddingX } from "../terminal-padding";
 import type { TodoItem } from "../../../tools/details/todo";
@@ -149,7 +149,17 @@ function paintTodoHud(node: UiNode, cx: PaintContext): Block {
 	const model = termOf<{ todo: TodoHudModel }>(node).todo;
 	const view = model?.window();
 	if (!model || !view || model.compact()) return EMPTY_BLOCK;
-	return { rows: todoHudRows(cx.theme, view, cx.width) };
+	const theme = cx.theme;
+	const collapsed = model.collapsed();
+	const disclosure = theme.symbols.symbol(collapsed ? "nav.expand" : "nav.collapse");
+	const title = `${theme.fg("accent", disclosure)} ${theme.style("strong", theme.fg("accent", "TODO"))} ${theme.fg("dim", `${view.closed}/${view.total}`)}`;
+	const header = truncate(`${" ".repeat(terminalPaddingX())}${title}`, cx.width, "");
+	const rows = collapsed ? ["", header] : todoHudRows(theme, view, cx.width);
+	rows[1] = header;
+	return {
+		rows,
+		hits: [{ row: 1, col: 0, width: cx.width, height: 1, node, act: "todo.collapse" }],
+	};
 }
 
 defineRolePainter("col", "omp.hud.todo", paintTodoHud);

@@ -68,6 +68,8 @@ export class SubagentHudModel {
 	readonly entries = signal<readonly SubagentEntry[]>([]);
 	/** Every agent listed, with a `… show less` row. */
 	readonly expanded = signal(false);
+	/** Fold the terminal section to its header without changing the list window. */
+	readonly collapsed = signal(false);
 	readonly livePreview = signal(false);
 	/** The agent hub's key, shown right of the header. */
 	readonly hubKey = signal<string | undefined>(undefined);
@@ -175,7 +177,8 @@ export function SubagentHud(props: { readonly model: SubagentHudModel }): JSXNod
 				role="omp.hud.subagents"
 				term={{ subagents: model }}
 				onAction={act => {
-					if (act === "subagents.toggle") model.onToggle?.();
+					if (act === "subagents.collapse") model.collapsed.set(!model.collapsed());
+					else if (act === "subagents.toggle") model.onToggle?.();
 					else if (act.startsWith("subagents.focus=")) model.onFocus?.(act.slice("subagents.focus=".length));
 				}}
 			/>

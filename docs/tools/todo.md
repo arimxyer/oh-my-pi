@@ -129,6 +129,7 @@ The same file also exposes non-tool helpers used by `/todo`:
    - `event-controller` updates the visible todo panel from successful results.
    - On error, `event-controller` shows `Todo update failed...`; the visible panel may stay stale until a later successful call.
    - `/todo expand` shows every phase and task in the sticky HUD; `/todo collapse` restores its bounded preview. Both are display-only and leave todo state unchanged.
+   - With `tui.mouse` enabled, click the `TODO` header above the input area to collapse or expand the section. The collapsed header keeps the progress count. Reopening restores the previous preview or full view.
 - Background work / cancellation
    - When every task is `completed` or `abandoned`, the TUI hides the HUD after `tasks.todoClearDelay`. Canonical phases are not removed. The dismissal is persisted as a `todo_hud_state` custom entry tied to the exact canonical snapshot (`packages/coding-agent/src/modes/interactive-mode.ts`).
 

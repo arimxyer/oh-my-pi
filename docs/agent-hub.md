@@ -87,6 +87,8 @@ While subagents run, a pinned `Subagents` block above the editor lists every liv
 
 The list stays short: it shows a few rows plus an expander (`display.pinnedAgents: collapsed`, the default), lists everything (`full`), or hides entirely (`off`). Clicking the expander toggles between the two while `tui.mouse` is on.
 
+With `tui.mouse` enabled, click the `Subagents` header to collapse or expand the whole section. The header keeps the live agent count. Reopening restores the previous short or full list. This control is separate from the `TODO` header; both sections stay above the input area.
+
 Set `display.subagentLivePreview: true` to add a second line under each row showing what that agent is doing: its current tool call (or, between calls, the most recent one) with a one-line detail, plus the elapsed time once a call runs longer than five seconds. Off by default.
 
 Enable `tui.mouse` to click live subagent cards and jump-list rows directly in the main session, without opening the Hub first. A click focuses that card's most recent agent (a jump-list row focuses its exact agent); focusing a parked agent revives it. Hovering a live target lights it up first, so you can see what a click will open.

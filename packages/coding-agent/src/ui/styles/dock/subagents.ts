@@ -85,19 +85,20 @@ function paintSubagents(node: UiNode, cx: PaintContext): Block {
 	const paddingX = terminalPaddingX();
 	const pad = " ".repeat(paddingX);
 	const content = Math.max(0, cx.width - 2 * paddingX);
-	const layout = subagentLayout(entries.length, model.expanded());
-	const preview = model.livePreview();
-	// Rows are the tree's content width: the outer indent and the branch take four cells.
-	const rowWidth = Math.max(0, content - 4);
 	const title = truncate(
-		`${theme.style("strong", theme.fg("accent", "Subagents"))}${dim(`${symbols.symbol("sep.dot")}${entries.length} running`)}`,
+		`${theme.fg("accent", symbols.symbol(model.collapsed() ? "nav.expand" : "nav.collapse"))} ${theme.style("strong", theme.fg("accent", "Subagents"))}${dim(`${symbols.symbol("sep.dot")}${entries.length} running`)}`,
 		content,
 	);
 	const hubKey = model.hubKey();
 	const hint = hubKey ? dim(keyLabel(theme, hubKey)) : "";
 	const gap = content - visibleWidth(title) - visibleWidth(hint);
-	const rows = ["", `${pad}${hint && gap >= 2 ? `${title}${" ".repeat(gap)}${hint}` : title}`];
-	const hits: Hit[] = [];
+	const rows = ["", truncate(`${pad}${hint && gap >= 2 ? `${title}${" ".repeat(gap)}${hint}` : title}`, cx.width, "")];
+	const hits: Hit[] = [{ row: 1, col: 0, width: cx.width, height: 1, node, act: "subagents.collapse" }];
+	if (model.collapsed()) return { rows, hits };
+	const layout = subagentLayout(entries.length, model.expanded());
+	const preview = model.livePreview();
+	// Rows are the tree's content width: the outer indent and the branch take four cells.
+	const rowWidth = Math.max(0, content - 4);
 	const shown = entries.slice(0, layout.items);
 	const live = preview && shown.some(entry => entry.call?.live && entry.call.startedAt !== undefined);
 	const now = live ? cx.now() : 0;

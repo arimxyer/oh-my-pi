@@ -42,6 +42,8 @@ export class TodoHudModel {
 	readonly phases = signal<readonly TodoPhase[]>([]);
 	/** `/todo expand`: every stage and task. */
 	readonly expanded = signal(false);
+	/** Fold the terminal section to its header without changing the stage window. */
+	readonly collapsed = signal(false);
 	/** Dismissed (`/todo hide`, the auto-clear after a finished plan). */
 	readonly hidden = signal(false);
 	/** The terminal is shorter than {@link TODO_COMPACT_ROWS}: the status row carries the plan. */
@@ -236,7 +238,14 @@ export function TodoHud(props: { readonly model: TodoHudModel }): JSXNode {
 		const view = model.window();
 		if (!view) return undefined;
 		return (
-			<col key="todo" role="omp.hud.todo" term={{ todo: model }}>
+			<col
+				key="todo"
+				role="omp.hud.todo"
+				term={{ todo: model }}
+				onAction={act => {
+					if (act === "todo.collapse") model.collapsed.set(!model.collapsed());
+				}}
+			>
 				<row gap="sm" align="center">
 					<text spans={[{ t: "TODO", s: "accent strong" }]} />
 					<progress value={view.closed / view.total} label={`${view.closed}/${view.total}`} />

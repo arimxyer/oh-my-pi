@@ -514,10 +514,10 @@ describe("InteractiveMode todo HUD anchor", () => {
 
 		// Lightened: no boxed top/bottom rules.
 		expect(lines.some(line => line === "─".repeat(80))).toBe(false);
-		// The title remains a compact anchor; overall progress colors the tree
-		// spine and tail, not the title text.
+		// The title keeps total progress visible when the section folds; the
+		// tree spine and tail also show progress while it is open.
 		const root = lines.find(line => line.includes("TODO"));
-		expect(root?.trim()).toBe("TODO");
+		expect(root?.trim()).toBe(`${currentTheme().symbols.symbol("nav.collapse")} TODO 1/4`);
 		// Active stage: highlighted header with its own task progress, expanded as a
 		// connector tree; the just-completed task stays as the lead row so progress
 		// is visible while the stage still has open work.
@@ -551,10 +551,9 @@ describe("InteractiveMode todo HUD anchor", () => {
 			},
 		]);
 		const lines = todoRows(mode, 80);
-		// One stage still renders the compact title; progress belongs to the
-		// tree spine and tail.
+		// One stage still renders the compact title with total progress.
 		const root = lines.find(line => line.includes("TODO"));
-		expect(root?.trim()).toBe("TODO");
+		expect(root?.trim()).toBe(`${currentTheme().symbols.symbol("nav.collapse")} TODO 0/2`);
 		// The stage keeps its task progress; no roman numeral for a lone stage.
 		expect(lines.some(line => line.includes("Tasks") && line.includes("0/2"))).toBe(true);
 		expect(lines.some(line => line.includes("I. Tasks"))).toBe(false);
@@ -579,9 +578,9 @@ describe("InteractiveMode todo HUD anchor", () => {
 		expect(lines.some(line => line.includes("V. Five"))).toBe(true);
 		expect(lines.some(line => line.includes("Six"))).toBe(false);
 		expect(lines.some(line => line.includes("2 more stages"))).toBe(true);
-		// Hidden stages do not change the compact title.
+		// Hidden stages still contribute to the header's total progress.
 		const root = lines.find(line => line.includes("TODO"));
-		expect(root?.trim()).toBe("TODO");
+		expect(root?.trim()).toBe(`${currentTheme().symbols.symbol("nav.collapse")} TODO 0/7`);
 	});
 
 	it("wraps a row wider than the panel beneath its own content instead of the panel edge", () => {
@@ -611,7 +610,8 @@ describe("InteractiveMode todo HUD anchor", () => {
 		styledTerm.dispose();
 		while (styled.length > 0 && Bun.stripANSI(styled.at(-1)!).trim() === "") styled.pop();
 		const rows = styled.map(row => Bun.stripANSI(row).trimEnd());
-		const pad = " ".repeat(rows.find(row => row.trim() === "TODO")!.indexOf("TODO"));
+		const header = rows.find(row => row.includes("TODO"))!;
+		const pad = header.slice(0, header.indexOf(currentTheme().symbols.symbol("nav.collapse")));
 		// Rows after the first of the logical row that starts at `head` and ends at `end`.
 		const continuations = (head: string, end: string): string[] =>
 			rows.slice(rows.findIndex(row => row.includes(head)) + 1, rows.findIndex(row => row.includes(end)) + 1);

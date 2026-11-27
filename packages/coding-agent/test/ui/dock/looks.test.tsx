@@ -7,6 +7,7 @@
 import { describe, expect, test } from "bun:test";
 import { createRoot, type JSXNode, resolveChildren, signal, type UiNode } from "@oh-my-pi/pi-tui";
 import { type Block, paintNode, staticEnvironment } from "@oh-my-pi/pi-tui/term/paint";
+import { createTestTerminal } from "@oh-my-pi/pi-tui/testing/terminal";
 import { stripEscapes } from "@oh-my-pi/pi-tui/text/ansi";
 import { visibleWidth } from "@oh-my-pi/pi-tui/text/width";
 import { loadThemeSync } from "@oh-my-pi/pi-tui/theme/loader";
@@ -29,6 +30,7 @@ import {
 	SubagentHud,
 	SubagentHudModel,
 	subagentEntries,
+	TodoHud,
 	TodoHudModel,
 	WorkingRow,
 	workingMessage,
@@ -65,13 +67,14 @@ describe("subagents HUD", () => {
 		const { rows, block } = paint(() => <SubagentHud model={model} />);
 		expect(rows).toEqual([
 			"",
-			" Subagents · 4 running",
+			" ▾ Subagents · 4 running",
 			"  ├─ ⟳ a: Work on a",
 			"  ├─ ⟳ b: Work on b",
 			"  └─ ⟳ c: Work on c",
 			"  … 1 more — expand",
 		]);
 		expect(block.hits?.map(hit => [hit.row, hit.height, hit.act])).toEqual([
+			[1, 1, "subagents.collapse"],
 			[2, 1, "subagents.focus=a"],
 			[3, 1, "subagents.focus=b"],
 			[4, 1, "subagents.focus=c"],
@@ -143,9 +146,142 @@ describe("subagents HUD", () => {
 			"     └ bash: bun test · 6.2s",
 		]);
 		expect(block.hits?.map(hit => [hit.row, hit.height])).toEqual([
+			[1, 1],
 			[2, 2],
 			[4, 2],
 		]);
+	});
+});
+
+describe("dock section headers", () => {
+	for (const expanded of [false, true]) {
+		test(`header clicks preserve ${expanded ? "full" : "preview"} lists and fold sections independently`, () => {
+			const todo = new TodoHudModel();
+			todo.expanded.set(expanded);
+			todo.phases.set([
+				{
+					name: "Plan",
+					// Six open tasks fit without a summary; seven must use the preview window.
+					tasks: Array.from({ length: 8 }, (_, index) => ({ content: `task ${index + 1}`, status: "pending" as const })),
+				},
+			]);
+			const agents = new SubagentHudModel();
+			agents.expanded.set(expanded);
+			agents.entries.set(["A", "B", "C", "D"].map(id => ({ id, displayId: id })));
+			let focused: string | undefined;
+			let toggles = 0;
+			agents.onFocus = id => {
+				focused = id;
+			};
+			agents.onToggle = () => {
+				toggles++;
+			};
+			const term = createTestTerminal(
+				() => ({
+					main: (
+						<col>
+							<TodoHud model={todo} />
+							<SubagentHud model={agents} />
+						</col>
+					),
+				}),
+				{ columns: 80, rows: 60, theme: loadThemeSync("dark"), now: NOW },
+			);
+			const clickHeader = (label: string) => {
+				const row = term.screen().findIndex(line => line.includes(label));
+				expect(row).toBeGreaterThanOrEqual(0);
+				term.mouse({ row, col: 2, button: "left", action: "press", mods: [] });
+				term.mouse({ row, col: 2, button: "left", action: "release", mods: [] });
+			};
+			try {
+				expect(todo.collapsed()).toBe(false);
+				expect(agents.collapsed()).toBe(false);
+				clickHeader("TODO");
+				expect(todo.collapsed()).toBe(true);
+				expect(agents.collapsed()).toBe(false);
+				expect(term.screen().join("\n")).not.toContain("task 1");
+				expect(term.screen().join("\n")).toContain("A");
+				clickHeader("Subagents");
+				expect(agents.collapsed()).toBe(true);
+				todo.phases.set([
+					{
+						name: "Plan",
+						tasks: todo.phases()[0]!.tasks.map((task, index) =>
+							index === 0 ? { ...task, status: "completed" } : task,
+						),
+					},
+				]);
+				agents.entries.set([...agents.entries(), { id: "E", displayId: "E" }]);
+				term.render();
+				expect(term.screen().filter(line => line.trim())).toEqual([" ▸ TODO 1/8", " ▸ Subagents · 5 running"]);
+				clickHeader("TODO");
+				expect(todo.collapsed()).toBe(false);
+				expect(agents.collapsed()).toBe(true);
+				expect(term.screen().join("\n")).toContain("task 1");
+				expect(term.screen().join("\n").includes("task 8")).toBe(expanded);
+				clickHeader("Subagents");
+				expect(agents.collapsed()).toBe(false);
+				expect(term.screen().join("\n").includes("⟳ E")).toBe(expanded);
+				expect(term.screen().join("\n")).toContain(expanded ? "show less" : "2 more — expand");
+				expect(todo.expanded()).toBe(expanded);
+				expect(agents.expanded()).toBe(expanded);
+				expect(focused).toBeUndefined();
+				expect(toggles).toBe(0);
+			} finally {
+				term.dispose();
+			}
+		});
+	}
+
+	test("a folded agent section has no body hit targets or preview clock reads", () => {
+		createRoot(dispose => {
+			try {
+				const model = new SubagentHudModel();
+				model.livePreview.set(true);
+				model.collapsed.set(true);
+				model.entries.set([
+					{ id: "A", displayId: "A", call: { tool: "bash", live: true, startedAt: NOW - 6200 } },
+				]);
+				const node = resolveChildren(<SubagentHud model={model} />)()[0]!;
+				let clockReads = 0;
+				const clockEnv = {
+					...env,
+					clock: () => {
+						clockReads++;
+						return NOW;
+					},
+				};
+				const folded = paintNode(clockEnv, node, 80);
+				expect(folded.rows).toHaveLength(2);
+				expect(folded.hits?.map(hit => [hit.row, hit.height, hit.act])).toEqual([
+					[1, 1, "subagents.collapse"],
+				]);
+				expect(clockReads).toBe(0);
+				model.collapsed.set(false);
+				const opened = paintNode(clockEnv, node, 80);
+				expect(opened.hits?.map(hit => hit.act)).toEqual(["subagents.collapse", "subagents.focus=A"]);
+				expect(clockReads).toBeGreaterThan(0);
+			} finally {
+				dispose();
+			}
+		});
+	});
+
+	test("folded headers stay within narrow terminal widths", () => {
+		const todo = new TodoHudModel();
+		todo.phases.set([{ name: "Plan", tasks: [{ content: "task", status: "pending" }] }]);
+		todo.collapsed.set(true);
+		const agents = new SubagentHudModel();
+		agents.entries.set([{ id: "A", displayId: "A" }]);
+		agents.hubKey.set("ctrl+shift+a");
+		agents.collapsed.set(true);
+		for (const width of [0, 1, 2, 4, 8, 18]) {
+			for (const factory of [() => <TodoHud model={todo} />, () => <SubagentHud model={agents} />]) {
+				const { rows, block } = paint(factory, width);
+				for (const row of rows) expect(visibleWidth(row)).toBeLessThanOrEqual(width);
+				expect(block.hits?.[0]?.width).toBe(width);
+			}
+		}
 	});
 });
 
