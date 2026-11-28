@@ -17,6 +17,7 @@ import { EventBus } from "@oh-my-pi/pi-coding-agent/utils/event-bus";
 import { jsx, type KeyEvent, signal } from "@oh-my-pi/pi-tui";
 import { TempDir } from "@oh-my-pi/pi-utils";
 import { cfgTuiMouse } from "@oh-my-pi/pi-coding-agent/modes/settings";
+import { AgentRegistry, MAIN_AGENT_ID } from "@oh-my-pi/pi-coding-agent/registry/agent-registry";
 import { initTheme } from "../src/ui/theme/service";
 import { createModeTerminal, type ModeTerminal, transcriptText } from "./helpers/mode-terminal";
 
@@ -115,6 +116,85 @@ describe("inline click-to-focus geometry", () => {
 		term.mouse({ x: 5, y: term.screen().length - 1 });
 		await term.settle();
 		expect(focus).not.toHaveBeenCalled();
+	});
+
+	it("navigates nested agent breadcrumbs and returns to main through terminal clicks without losing the draft", async () => {
+		cfgTuiMouse.set(mode.settings, true);
+		await mode.init({ suppressWelcomeIntro: true });
+		void mode.getUserInput();
+		const registry = AgentRegistry.global();
+		const agents = ["ClickParent", "ClickChild"].map(
+			() =>
+				new AgentSession({
+					agent: new Agent({
+						initialState: { model: session.agent.state.model, systemPrompt: ["Test"], tools: [], messages: [] },
+					}),
+					sessionManager: SessionManager.inMemory(),
+					settings: Settings.isolated(),
+					modelRegistry,
+				}),
+		);
+		const parent = registry.register({
+			id: "ClickParent",
+			displayName: "ClickParent",
+			kind: "sub",
+			parentId: MAIN_AGENT_ID,
+			session: agents[0]!,
+			status: "idle",
+		});
+		const child = registry.register({
+			id: "ClickChild",
+			displayName: "ClickChild",
+			kind: "sub",
+			parentId: parent.id,
+			session: agents[1]!,
+			status: "idle",
+		});
+		const click = async (label: string): Promise<void> => {
+			await term.waitFor(() => term.screen().some(row => row.includes("Main agent") && row.includes(label)), 1000);
+			const screen = term.screen();
+			const y = screen.findIndex(row => row.includes("Main agent") && row.includes(label));
+			term.mouse({ x: screen[y]!.indexOf(label), y });
+		};
+		try {
+			await mode.focusAgentSession(child.id);
+			mode.composer.setText("unfinished draft");
+			await term.waitFor(
+				() =>
+					term
+						.screen()
+						.some(row => row.includes("Main agent") && row.includes(parent.id) && row.includes(child.id)),
+				1000,
+			);
+			await click(parent.id);
+			await term.waitFor(() => mode.focusedAgentId === parent.id, 1000);
+			await term.waitFor(
+				() =>
+					term
+						.screen()
+						.some(row => row.includes("Main agent") && row.includes(parent.id) && !row.includes(child.id)),
+				1000,
+			);
+			expect(mode.viewSession).toBe(agents[0]!);
+			expect(mode.composer.text()).toBe("unfinished draft");
+
+			// Main skips all ancestors, rather than only stepping up one level.
+			await mode.focusAgentSession(child.id);
+			await term.waitFor(
+				() => term.screen().some(row => row.includes("Main agent") && row.includes(child.id)),
+				1000,
+			);
+			await click("Main agent");
+			await term.waitFor(() => mode.focusedAgentId === undefined, 1000);
+			await term.waitFor(() => !term.screen().some(row => row.includes("Main agent")), 1000);
+			expect(mode.viewSession).toBe(session);
+			expect(mode.composer.text()).toBe("unfinished draft");
+		} finally {
+			await mode.unfocusSession();
+			registry.unregister(child.id, child);
+			registry.unregister(parent.id, parent);
+			await Promise.all(agents.map(agent => agent.dispose()));
+		}
 	});
 
 	it("bands the hovered live task row and clears it off-target", async () => {
