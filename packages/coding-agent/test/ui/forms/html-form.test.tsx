@@ -7,6 +7,8 @@ import { expect, test, vi } from "bun:test";
 import { nativeShell } from "../../helpers/native-shell";
 import { signal } from "@oh-my-pi/pi-tui";
 import { CORPUS_NOW } from "@oh-my-pi/pi-tui/testing/corpus";
+import { createTestTerminal } from "@oh-my-pi/pi-tui/testing/terminal";
+import { visibleWidth } from "@oh-my-pi/pi-tui/text/width";
 import { parseHtmlForm } from "../../../src/tools/html-form/parse";
 import { formMedia, HtmlFormDialog, HtmlFormModel } from "../../../src/ui/forms/html-form";
 import { figureWorkSettled } from "../../../src/ui/transcript/figures";
@@ -47,6 +49,82 @@ test("native form checkboxes and option-note menus reach the submitted answers",
 	expect(onSubmit).toHaveBeenCalledWith({ parts: ["leg"] }, [
 		expect.objectContaining({ name: "parts", value: "leg", text: "repair" }),
 	]);
+});
+
+test("long form answers wrap and scrolling follows the editing position without changing the answer", () => {
+	const onSubmit = vi.fn();
+	const model = new HtmlFormModel(parseHtmlForm('<form><label>Answer<input name="answer"></label></form>'), {
+		onSubmit,
+		onCancel: () => {},
+	});
+	const term = createTestTerminal(() => ({ dock: <HtmlFormDialog model={model} terminalRows={() => 20} /> }), {
+		columns: 40,
+		rows: 20,
+	});
+	try {
+		const answer = `START ${"some words 界🙂 ".repeat(35)} FINISH`;
+		model.paste(answer);
+		term.render();
+		expect(term.screen().join("\n")).toContain("FINISH");
+		expect(term.screen().join("\n")).not.toContain("START");
+		expect(term.rows().every(row => visibleWidth(row) <= 40)).toBe(true);
+		model.key({ id: "home", kind: "press", raw: "" });
+		term.render();
+		expect(term.screen().join("\n")).toContain("START");
+		expect(term.screen().join("\n")).not.toContain("FINISH");
+		model.submit();
+		expect(onSubmit).toHaveBeenCalledWith({ answer }, []);
+	} finally {
+		term.dispose();
+	}
+});
+
+test("Other answers and option notes wrap their text instead of clipping it", () => {
+	const model = new HtmlFormModel(
+		parseHtmlForm(
+			'<form><fieldset><legend>Pick</legend><label><input type="radio" name="pick" value="a">Alpha</label><label><input type="radio" name="pick" value="b">Beta</label></fieldset></form>',
+		),
+		{ onSubmit: () => {}, onCancel: () => {} },
+	);
+	const term = createTestTerminal(() => ({ dock: <HtmlFormDialog model={model} terminalRows={() => 40} /> }), {
+		columns: 40,
+		rows: 40,
+	});
+	try {
+		model.select(0, "other", false);
+		model.paste("A custom answer that needs multiple rows ENDOTHER");
+		term.render();
+		expect(term.screen().join("\n")).toContain("ENDOTHER");
+		model.select(0, "o0", false);
+		model.startNote();
+		model.setNoteText("A note that also needs multiple rows ENDNOTE");
+		term.render();
+		expect(term.screen().join("\n")).toContain("ENDNOTE");
+		expect(term.rows().every(row => visibleWidth(row) <= 40)).toBe(true);
+	} finally {
+		term.dispose();
+	}
+});
+
+test("textarea soft wrapping preserves explicit newlines and shows the last typed line", () => {
+	const model = new HtmlFormModel(
+		parseHtmlForm('<form><label>Notes<textarea name="notes"></textarea></label></form>'),
+		{ onSubmit: () => {}, onCancel: () => {} },
+	);
+	const term = createTestTerminal(() => ({ dock: <HtmlFormDialog model={model} terminalRows={() => 24} /> }), {
+		columns: 40,
+		rows: 24,
+	});
+	try {
+		const notes = `${"a".repeat(80)}\n${"b".repeat(80)} END`;
+		model.paste(notes);
+		term.render();
+		expect(term.screen().join("\n")).toContain("END");
+		expect(term.screen().filter(row => row.includes("bbbb")).length).toBeGreaterThan(1);
+		expect(model.data()).toEqual({ notes });
+	} finally {
+		term.dispose();
+	}
 });
 
 corpusSuite({

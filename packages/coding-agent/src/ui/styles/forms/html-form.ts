@@ -17,7 +17,7 @@ import { type Block, type PaintContext } from "@oh-my-pi/pi-tui/term/paint";
 import { paintPicture } from "@oh-my-pi/pi-tui/term/painters/image";
 import { flattenLine } from "@oh-my-pi/pi-tui/text/sanitize";
 import type { Theme } from "@oh-my-pi/pi-tui/theme/contract";
-import { padTo, sliceCells, truncate, visibleWidth, wrap } from "@oh-my-pi/pi-tui/text/width";
+import { padTo, sliceCells, truncate, visibleWidth, wrap, wrapChars } from "@oh-my-pi/pi-tui/text/width";
 import type { ChoiceField, FormBlock, FormField, FormSpan } from "../../../tools/html-form/parse";
 import { spansText } from "../../../tools/html-form/parse";
 import { type FormPart, isFoldCaption } from "../../forms/html-form/layout";
@@ -163,6 +163,53 @@ function caretLine(
 	return `${flat.slice(0, at)}${theme.style("inverse", ch)}${flat.slice(at + ch.length)}`;
 }
 
+/** Wrap an editor without dropping spaces; track its caret so tall answers scroll with editing. */
+function inputRows(
+	theme: Theme,
+	text: string,
+	cursor: number,
+	width: number,
+	placeholder?: string,
+	selection?: { readonly from: number; readonly to: number } | null,
+	endMarker = false,
+): { rows: string[]; caret: number } {
+	const rows: string[] = [];
+	let offset = 0;
+	let caret = 0;
+	for (const line of text.split("\n")) {
+		const at = cursor - offset;
+		const active = at >= 0 && at <= line.length;
+		const selected = selection
+			? { from: Math.max(0, selection.from - offset), to: Math.min(line.length, selection.to - offset) }
+			: undefined;
+		const content = active
+			? endMarker && at === line.length
+				? `${line}▏`
+				: caretLine(theme, line, at, text ? undefined : placeholder, selected)
+			: selected && selected.to > selected.from
+				? `${line.slice(0, selected.from)}${theme.style("inverse", line.slice(selected.from, selected.to))}${line.slice(selected.to)}`
+				: line;
+		if (active) {
+			const ch = at < line.length ? String.fromCodePoint(line.codePointAt(at)!) : " ";
+			caret = rows.length + wrapChars(`${line.slice(0, at)}${ch}`, width).length - 1;
+		}
+		rows.push(...wrapChars(theme.fgResolved("text", content), width));
+		offset += line.length + 1;
+	}
+	return { rows, caret };
+}
+
+function appendInput(
+	column: Column,
+	input: { rows: string[]; caret: number },
+	prefix: string,
+	continuation = prefix,
+): void {
+	column.focusStart = column.lines.length + input.caret;
+	column.focusEnd = column.focusStart + 1;
+	input.rows.forEach((row, i) => column.lines.push(`${i === 0 ? prefix : continuation}${row}`));
+}
+
 // ─── Content blocks ─────────────────────────────────────────────────────────
 
 function blockLines(cx: PaintContext, block: FormBlock, width: number, media: MediaState | undefined): string[] {
@@ -303,27 +350,31 @@ function optionRows(
 		if (row === OTHER_ROW) {
 			const checked = answer.otherChosen;
 			const editing = view.row === OTHER_ROW && view.active === index;
-			const text = editing
-				? caretLine(
-						theme,
-						answer.other.text,
-						answer.other.cursor,
-						"type your own",
-						model.vim({ kind: "other", field: index })?.selection(),
-					)
-				: answer.other.text
-					? theme.fg(
-							checked && answer.other.text.trim() ? "muted" : "text",
-							answer.other.text.replaceAll("\n", " "),
-						)
-					: theme.fg("dim", "type your own");
-			// Chosen only counts once something is typed.
 			const on = checked && answer.other.text.trim() !== "";
 			const glyph = field.multi ? (on ? "☑" : "☐") : on ? "◉" : "○";
 			const label = theme.fg(selected ? "accent" : on ? "muted" : "text", "Other: ");
-			const line = `${cursor}${theme.fg(on ? "success" : "dim", glyph)} ${label}${text}`;
-			// The field being typed in cuts like an editor: its ellipsis keeps the text's style.
-			lines.push(editing ? clip(line, width) : truncate(line, width, "…"));
+			const prefix = `${cursor}${theme.fg(on ? "success" : "dim", glyph)} ${label}`;
+			const indent = " ".repeat(visibleWidth(prefix));
+			if (editing) {
+				appendInput(
+					column,
+					inputRows(
+						theme,
+						answer.other.text,
+						answer.other.cursor,
+						Math.max(1, width - visibleWidth(prefix)),
+						"type your own",
+						model.vim({ kind: "other", field: index })?.selection(),
+					),
+					prefix,
+					indent,
+				);
+			} else {
+				const text = answer.other.text
+					? theme.fg(on ? "muted" : "text", answer.other.text.replaceAll("\n", " "))
+					: theme.fg("dim", "type your own");
+				lines.push(truncate(`${prefix}${text}`, width, "…"));
+			}
 		} else {
 			const option = field.options[row]!;
 			const checked = answer.checked.has(row);
@@ -344,14 +395,15 @@ function optionRows(
 				);
 			});
 		}
-		if (selected) column.focusEnd = lines.length;
+		if (selected && row !== OTHER_ROW) column.focusEnd = lines.length;
 		if (view.note && view.note.field === index && view.note.option === row) {
 			const label = flattenLine(spansText(field.options[row]!.label));
 			lines.push(clip(`    ${theme.fg("muted", `Note for ${label} · ${noteEditHint(model)}`)}`, width));
-			lines.push(
-				`    ${theme.fgResolved("text", `${view.note.text.slice(0, view.note.cursor)}▏${view.note.text.slice(view.note.cursor)}`)}`,
+			appendInput(
+				column,
+				inputRows(theme, view.note.text, view.note.cursor, Math.max(1, width - 4), undefined, undefined, true),
+				"    ",
 			);
-			column.focusEnd = lines.length;
 		}
 	}
 }
@@ -427,60 +479,38 @@ function openFieldLines(
 		column.focusEnd = lines.length;
 		if (view.note && view.note.field === index) {
 			const label = flattenLine(spansText(field.options[view.note.option]!.label));
-			column.overlay = {
-				at: lines.length,
-				rows: [
-					clip(`    ${theme.fg("muted", `Note for ${label} · ${noteEditHint(model)}`)}`, width),
-					`    ${theme.fgResolved("text", `${view.note.text.slice(0, view.note.cursor)}▏${view.note.text.slice(view.note.cursor)}`)}`,
-				],
-			};
+			lines.push(clip(`    ${theme.fg("muted", `Note for ${label} · ${noteEditHint(model)}`)}`, width));
+			appendInput(
+				column,
+				inputRows(theme, view.note.text, view.note.cursor, Math.max(1, width - 4), undefined, undefined, true),
+				"    ",
+			);
 		} else if (view.dropdown !== undefined) column.overlay = { at: lines.length, rows: [] };
 	} else {
 		lines.push(labelLine(theme, model, field, view, width));
 		const answer = model.answer(index);
 		const bar = view.focused ? theme.fg("accent", "│") : theme.fg("dim", "│");
+		const secret = field.type === "password";
+		const text = secret ? "•".repeat([...answer.text.text].length) : answer.text.text;
+		const cursor = secret ? [...answer.text.text.slice(0, answer.text.cursor)].length : answer.text.cursor;
+		const input = inputRows(
+			theme,
+			text,
+			cursor,
+			Math.max(1, width - 4),
+			field.placeholder || undefined,
+			model.vim({ kind: "text", field: index })?.selection(),
+			field.multiline,
+		);
 		if (field.multiline) {
-			const text = answer.text.text;
-			const rows = text === "" ? [""] : text.split("\n");
-			const shown = Math.max(4, rows.length);
-			const room = Math.max(1, width - 4);
-			// The caret's row and column (a bar after the row's end, else the character under it inverted).
-			const before = text.slice(0, answer.text.cursor).split("\n");
-			const caretRow = before.length - 1;
-			const caretCol = before[caretRow]!.length;
-			for (let r = 0; r < shown; r++) {
-				const row = rows[r] ?? "";
-				let content = theme.fgResolved("text", row);
-				if (r === caretRow && view.focused) {
-					if (caretCol >= row.length) content = theme.fgResolved("text", `${row}▏`);
-					else {
-						const ch = String.fromCodePoint(row.codePointAt(caretCol)!);
-						content = theme.fgResolved(
-							"text",
-							`${row.slice(0, caretCol)}${theme.style("inverse", ch)}${row.slice(caretCol + ch.length)}`,
-						);
-					}
-				}
-				if (r === 0 && text === "") {
-					// The placeholder sits at the right edge, a cell in from it; it goes when it does not fit.
-					const placeholder = field.placeholder ?? "";
-					const gap = room - 1 - visibleWidth(placeholder);
-					content = theme.fgResolved("text", `▏${gap >= 1 ? `${" ".repeat(gap)}${placeholder}` : ""}`);
-				}
-				lines.push(truncate(`  ${bar} ${content}`, width, "…"));
+			if (!text) {
+				const placeholder = field.placeholder ?? "";
+				const gap = width - 5 - visibleWidth(placeholder);
+				input.rows[0] = theme.fgResolved("text", `▏${gap >= 1 ? `${" ".repeat(gap)}${placeholder}` : ""}`);
 			}
-		} else {
-			const secret = field.type === "password";
-			const text = secret ? "•".repeat([...answer.text.text].length) : answer.text.text;
-			const line = caretLine(
-				theme,
-				text,
-				secret ? 0 : answer.text.cursor,
-				field.placeholder || undefined,
-				model.vim({ kind: "text", field: index })?.selection(),
-			);
-			lines.push(clip(`  ${bar} ${line}`, width));
+			while (input.rows.length < 4) input.rows.push("");
 		}
+		appendInput(column, input, `  ${bar} `);
 		if (error) lines.push(clip(`    ${theme.fg("error", error)}`, width));
 	}
 	if (field.kind === "choice" && error)
