@@ -3899,6 +3899,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.#composerHintRevision.set(this.#composerHintRevision.peek() + 1);
 		const draft = untrack(this.composer.text).trimStart();
 		const viewing = this.#viewingLineage();
+		this.hud.subagents.viewing.set(viewing !== undefined);
 		this.composer.setState({
 			running: this.#working.kind !== undefined || this.session.isStreaming,
 			...(this.isBashMode

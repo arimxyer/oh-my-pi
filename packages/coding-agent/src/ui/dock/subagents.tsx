@@ -66,6 +66,8 @@ export interface SubagentEntry {
 /** What the HUD shows; the controller feeds it from the observer registry. */
 export class SubagentHudModel {
 	readonly entries = signal<readonly SubagentEntry[]>([]);
+	/** Keep a way back to main while viewing a subagent, even when none are running. */
+	readonly viewing = signal(false);
 	/** Every agent listed, with a `… show less` row. */
 	readonly expanded = signal(false);
 	/** Fold the terminal section to its header without changing the list window. */
@@ -171,7 +173,7 @@ export function subagentEntries(sessions: readonly ObservableSession[], modelBad
 export function SubagentHud(props: { readonly model: SubagentHudModel }): JSXNode {
 	const model = props.model;
 	return () => {
-		if (model.entries().length === 0) return undefined;
+		if (model.entries().length === 0 && !model.viewing()) return undefined;
 		return (
 			<col
 				role="omp.hud.subagents"

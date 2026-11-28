@@ -1,20 +1,21 @@
 /**
  * Terminal look of the subagents HUD (`col` `omp.hud.subagents`): a blank
  * row; inset `Subagents` (bold accent) ` · 2 running` (dim) with the
- * hub key dim at the right edge; then the agents as a dim tree, one cell
- * further in: `⟳ Id: description` in accent (the `⟳` muted while the agent
- * only waits on its own agents or jobs; the id bold, a dim `⟦type⟧`
- * badge, a model badge ahead of the id), or the id and a muted assignment
- * preview; a preview row under it (`└ grep: pattern`, the tool muted while
- * live, dim with its ✔/✘ once done, `· 6.2s` in warning past five seconds);
- * then the dim expander. Every row is cut to the width. Clicks on an agent's
- * rows send `subagents.focus=<id>`, on the expander `subagents.toggle`.
+ * hub key dim at the right edge and, in a subagent view, a main-agent link;
+ * agents form a dim tree one cell further in, with model/type badges and
+ * descriptions or assignment previews. A waiting agent's mark is muted.
+ * Live tool previews show the current call; finished calls carry ✔/✘.
+ * Calls running longer than five seconds show elapsed time in warning.
+ * The dim expander follows the agents. Every row is cut to the width.
+ * Agent rows send `subagents.focus=<id>`; the main link uses the main id.
+ * The expander sends `subagents.toggle`; the rest of the header folds the list.
  */
 import type { UiNode } from "@oh-my-pi/pi-tui";
 import { type Block, defineRolePainter, EMPTY_BLOCK, type Hit, type PaintContext } from "@oh-my-pi/pi-tui/term/paint";
 import { truncate, visibleWidth } from "@oh-my-pi/pi-tui/text/width";
 import type { Theme } from "@oh-my-pi/pi-tui/theme/contract";
 import { formatDuration } from "@oh-my-pi/pi-utils";
+import { MAIN_AGENT_ID } from "../../../registry/agent-hub-types";
 import { terminalPaddingX } from "../terminal-padding";
 import { FEED_MODEL_BADGE_WIDTH, previewLine } from "../../../utils/render-utils";
 import { keyLabel } from "../../keys/hints";
@@ -78,22 +79,41 @@ function callLine(theme: Theme, call: SubagentCall, width: number, now: number):
 function paintSubagents(node: UiNode, cx: PaintContext): Block {
 	const model = termOf<{ subagents: SubagentHudModel }>(node).subagents;
 	const entries = model?.entries() ?? [];
-	if (!model || entries.length === 0) return EMPTY_BLOCK;
+	if (!model || (entries.length === 0 && !model.viewing())) return EMPTY_BLOCK;
 	const theme = cx.theme;
 	const dim = (text: string): string => theme.fg("dim", text);
 	const symbols = theme.symbols;
 	const paddingX = terminalPaddingX();
 	const pad = " ".repeat(paddingX);
 	const content = Math.max(0, cx.width - 2 * paddingX);
+	const back = model.viewing() ? truncate(theme.style("accent underline", "← Main agent"), content) : "";
+	const backWidth = visibleWidth(back);
 	const title = truncate(
 		`${theme.fg("accent", symbols.symbol(model.collapsed() ? "nav.expand" : "nav.collapse"))} ${theme.style("strong", theme.fg("accent", "Subagents"))}${dim(`${symbols.symbol("sep.dot")}${entries.length} running`)}`,
-		content,
+		Math.max(0, content - backWidth - (back ? 2 : 0)),
 	);
+	const titleWidth = visibleWidth(title);
+	const backGap = back && title ? "  " : "";
+	const heading = `${title}${backGap}${back}`;
 	const hubKey = model.hubKey();
 	const hint = hubKey ? dim(keyLabel(theme, hubKey)) : "";
-	const gap = content - visibleWidth(title) - visibleWidth(hint);
-	const rows = ["", truncate(`${pad}${hint && gap >= 2 ? `${title}${" ".repeat(gap)}${hint}` : title}`, cx.width, "")];
-	const hits: Hit[] = [{ row: 1, col: 0, width: cx.width, height: 1, node, act: "subagents.collapse" }];
+	const gap = content - visibleWidth(heading) - visibleWidth(hint);
+	const rows = [
+		"",
+		truncate(`${pad}${hint && gap >= 2 ? `${heading}${" ".repeat(gap)}${hint}` : heading}`, cx.width, ""),
+	];
+	const hits: Hit[] = [];
+	if (backWidth > 0) {
+		const col = paddingX + titleWidth + backGap.length;
+		if (col > 0) hits.push({ row: 1, col: 0, width: col, height: 1, node, act: "subagents.collapse" });
+		hits.push({ row: 1, col, width: backWidth, height: 1, node, act: `subagents.focus=${MAIN_AGENT_ID}` });
+		const end = col + backWidth;
+		if (end < cx.width) {
+			hits.push({ row: 1, col: end, width: cx.width - end, height: 1, node, act: "subagents.collapse" });
+		}
+	} else {
+		hits.push({ row: 1, col: 0, width: cx.width, height: 1, node, act: "subagents.collapse" });
+	}
 	if (model.collapsed()) return { rows, hits };
 	const layout = subagentLayout(entries.length, model.expanded());
 	const preview = model.livePreview();

@@ -1,7 +1,7 @@
 /**
  * The composer in the terminal (`col` nodes with role `omp.editor` and
  * `omp.editor.<state>`): its text field inside the chrome of the composer's
- * shape, the viewing breadcrumbs above it and the completion popup above those.
+ * shape, the completion popup above it.
  *
  * The field (`line` row → `editor`) is painted at the wrap width the shape
  * leaves, plus the padding cell an end-of-row caret may take; each of its
@@ -11,17 +11,8 @@
  * keys are away at an ask above).
  */
 import type { UiNode } from "@oh-my-pi/pi-tui";
-import {
-	type Block,
-	type Cell,
-	defineRolePainter,
-	EMPTY_BLOCK,
-	type Hit,
-	type PaintContext,
-} from "@oh-my-pi/pi-tui/term/paint";
-import { offsetBlock } from "@oh-my-pi/pi-tui/term/painters/layout";
-import { singleLine, stripControl } from "@oh-my-pi/pi-tui/text/sanitize";
-import { truncate, visibleWidth } from "@oh-my-pi/pi-tui/text/width";
+import { type Block, type Cell, defineRolePainter, EMPTY_BLOCK, type PaintContext } from "@oh-my-pi/pi-tui/term/paint";
+import { visibleWidth } from "@oh-my-pi/pi-tui/text/width";
 import { fgSgr } from "@oh-my-pi/pi-tui/theme/color";
 import { type ComposerChromeContext, type ComposerStatus, caretOverflow, composerShape } from "./shapes";
 
@@ -72,39 +63,6 @@ export function composerField(node: UiNode): UiNode | undefined {
 	return line?.children().find(child => child.kind === "editor" || child.kind === "input");
 }
 
-/** Reuse the native header's navigation targets, wrapping crumbs before they overflow. */
-function paintViewing(node: UiNode, cx: PaintContext): Block {
-	const children = node.children();
-	const exit = children.find(child => child.key() === "exit");
-	if (!exit || cx.width <= 0) return EMPTY_BLOCK;
-	const rows = [""];
-	const hits: Hit[] = [];
-	let col = 0;
-	for (const child of [
-		exit,
-		...children.filter(child => child.key()?.startsWith("crumb:") || child.key() === "agent"),
-	]) {
-		const props = child.props() as { text?: string; actions?: { click?: string } };
-		const label = truncate(child === exit ? "← Main agent" : singleLine(stripControl(props.text ?? "")), cx.width);
-		const width = visibleWidth(label);
-		if (width === 0) continue;
-		if (col > 0) {
-			if (col + 3 + width > cx.width) {
-				rows.push("");
-				col = 0;
-			} else {
-				rows[rows.length - 1] += cx.theme.fg("dim", " › ");
-				col += 3;
-			}
-		}
-		const act = props.actions?.click;
-		rows[rows.length - 1] += act ? cx.theme.style("accent underline", label) : cx.theme.style("strong", label);
-		if (act) hits.push({ row: rows.length - 1, col, width, height: 1, node: child, act });
-		col += width;
-	}
-	return { rows, hits };
-}
-
 function paintComposer(node: UiNode, cx: PaintContext): Block {
 	const term = ((node.props() as { term?: ComposerTerm }).term ?? {}) as ComposerTerm;
 	const theme = cx.theme;
@@ -139,9 +97,7 @@ function paintComposer(node: UiNode, cx: PaintContext): Block {
 		...(status ? { status } : {}),
 	};
 	const gutter = shape.gutter ? shape.gutter.slice(0, gutterWidth) : "";
-	const focus = node.children().find(child => child.key() === "focus");
-	const viewing = focus ? paintViewing(focus, cx) : EMPTY_BLOCK;
-	const rows = [...viewing.rows];
+	const rows: string[] = [];
 	const top = shape.top?.(chrome);
 	if (top !== undefined) rows.push(top);
 	let cursor: Cell | undefined;
@@ -180,7 +136,6 @@ function paintComposer(node: UiNode, cx: PaintContext): Block {
 	return {
 		rows: term.faint ? drawn.map(faint) : drawn,
 		...(covering.length > 0 ? { covering: covering.length } : {}),
-		...offsetBlock(viewing, covering.length, 0),
 		...(cursor ? { cursor } : {}),
 	};
 }

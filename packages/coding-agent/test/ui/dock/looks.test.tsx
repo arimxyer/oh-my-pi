@@ -153,6 +153,49 @@ describe("subagents HUD", () => {
 	});
 });
 
+test("main navigation stays separate from header folding when agents finish or the terminal narrows", () => {
+	const model = new SubagentHudModel();
+	model.entries.set([{ id: "Worker", displayId: "Worker" }]);
+	model.viewing.set(true);
+	model.hubKey.set("ctrl+shift+a");
+	const focused: string[] = [];
+	model.onFocus = id => focused.push(id);
+	const term = createTestTerminal(() => ({ main: <SubagentHud model={model} /> }), {
+		columns: 80,
+		rows: 10,
+		theme: loadThemeSync("dark"),
+	});
+	try {
+		term.mouse({ row: 1, col: 2, button: "left", action: "press", mods: [] });
+		term.mouse({ row: 1, col: 2, button: "left", action: "release", mods: [] });
+		expect(model.collapsed()).toBe(true);
+		expect(focused).toEqual([]);
+		for (const width of [80, 24, 8]) {
+			if (width === 24) model.entries.set([]);
+			term.resize(width, 10);
+			const { rows, block } = paint(() => <SubagentHud model={model} />, width);
+			const back = block.hits?.find(hit => hit.act === "subagents.focus=Main");
+			expect(back).toBeDefined();
+			expect(back!.col + back!.width).toBeLessThanOrEqual(width);
+			expect(rows.every(row => visibleWidth(row) <= width)).toBe(true);
+			for (const hit of block.hits ?? []) {
+				if (hit !== back) {
+					expect(hit.col + hit.width <= back!.col || hit.col >= back!.col + back!.width).toBe(true);
+				}
+			}
+			term.mouse({ row: back!.row, col: back!.col, button: "left", action: "press", mods: [] });
+			term.mouse({ row: back!.row, col: back!.col, button: "left", action: "release", mods: [] });
+			expect(model.collapsed()).toBe(true);
+		}
+		expect(focused).toEqual(["Main", "Main", "Main"]);
+		model.viewing.set(false);
+		term.render();
+		expect(term.screen().some(row => row.trim())).toBe(false);
+	} finally {
+		term.dispose();
+	}
+});
+
 describe("dock section headers", () => {
 	for (const expanded of [false, true]) {
 		test(`header clicks preserve ${expanded ? "full" : "preview"} lists and fold sections independently`, () => {

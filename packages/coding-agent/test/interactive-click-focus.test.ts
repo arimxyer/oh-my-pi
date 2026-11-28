@@ -118,7 +118,7 @@ describe("inline click-to-focus geometry", () => {
 		expect(focus).not.toHaveBeenCalled();
 	});
 
-	it("navigates nested agent breadcrumbs and returns to main through terminal clicks without losing the draft", async () => {
+	it("returns from a nested agent through the Subagents header without losing the draft or unfolding the list", async () => {
 		cfgTuiMouse.set(mode.settings, true);
 		await mode.init({ suppressWelcomeIntro: true });
 		void mode.getUserInput();
@@ -151,44 +151,27 @@ describe("inline click-to-focus geometry", () => {
 			status: "idle",
 		});
 		const click = async (label: string): Promise<void> => {
-			await term.waitFor(() => term.screen().some(row => row.includes("Main agent") && row.includes(label)), 1000);
+			await term.waitFor(() => term.screen().some(row => row.includes("Subagents") && row.includes(label)), 1000);
 			const screen = term.screen();
-			const y = screen.findIndex(row => row.includes("Main agent") && row.includes(label));
+			const y = screen.findIndex(row => row.includes("Subagents") && row.includes(label));
 			term.mouse({ x: screen[y]!.indexOf(label), y });
 		};
 		try {
 			await mode.focusAgentSession(child.id);
 			mode.composer.setText("unfinished draft");
 			await term.waitFor(
-				() =>
-					term
-						.screen()
-						.some(row => row.includes("Main agent") && row.includes(parent.id) && row.includes(child.id)),
+				() => term.screen().some(row => row.includes("Subagents") && row.includes("Main agent")),
 				1000,
 			);
-			await click(parent.id);
-			await term.waitFor(() => mode.focusedAgentId === parent.id, 1000);
-			await term.waitFor(
-				() =>
-					term
-						.screen()
-						.some(row => row.includes("Main agent") && row.includes(parent.id) && !row.includes(child.id)),
-				1000,
-			);
-			expect(mode.viewSession).toBe(agents[0]!);
-			expect(mode.composer.text()).toBe("unfinished draft");
-
-			// Main skips all ancestors, rather than only stepping up one level.
-			await mode.focusAgentSession(child.id);
-			await term.waitFor(
-				() => term.screen().some(row => row.includes("Main agent") && row.includes(child.id)),
-				1000,
-			);
+			await click("Subagents");
+			await term.waitFor(() => mode.hud.subagents.collapsed(), 1000);
+			// The button skips all ancestors and stays available when the list is folded or empty.
 			await click("Main agent");
 			await term.waitFor(() => mode.focusedAgentId === undefined, 1000);
 			await term.waitFor(() => !term.screen().some(row => row.includes("Main agent")), 1000);
 			expect(mode.viewSession).toBe(session);
 			expect(mode.composer.text()).toBe("unfinished draft");
+			expect(mode.hud.subagents.collapsed()).toBe(true);
 		} finally {
 			await mode.unfocusSession();
 			registry.unregister(child.id, child);
